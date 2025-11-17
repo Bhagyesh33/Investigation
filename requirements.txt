@@ -1,6 +1,7 @@
 streamlit
 snowflake-connector-python
 pandas
+matplotlib
 python-dotenv
 pillow
 docxtpl

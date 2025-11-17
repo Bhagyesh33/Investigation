@@ -1,4 +1,7 @@
-streamlit==1.39.0
-pandas==2.2.2
-snowflake-connector-python==3.10.1
-python-dateutil
+streamlit
+snowflake-connector-python
+pandas
+python-dotenv
+pillow
+docxtpl
+openpyxl

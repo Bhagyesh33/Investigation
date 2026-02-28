@@ -287,18 +287,38 @@ def validate_kpis(conn, database, source_schema, target_schema):
 class DataQualityValidator:
     def __init__(self, conn):
         self.conn = conn
+
     def _execute_query(self, query):
         cursor = self.conn.cursor()
         cursor.execute(query)
         return pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description])
+
+    def _get_column_details_map(self, database, schema, table):
+        """Returns dict mapping UPPER(col_name) -> {DATA_TYPE, IS_NULLABLE, ...}"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(f"""
+                SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE
+                FROM {database}.INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = '{schema}' AND TABLE_NAME = '{table}'
+            """)
+            return {row[0].upper(): {"name": row[0], "DATA_TYPE": row[1].upper(), "IS_NULLABLE": row[2]}
+                    for row in cursor.fetchall()}
+        except:
+            return {}
+
+    # --- Standard checks ---
     def _run_row_count_check(self, database, schema, table, min_rows):
         count = self._execute_query(f"SELECT COUNT(*) FROM {database}.{schema}.{table}").iloc[0, 0]
         status = "✅ Pass" if count >= min_rows else "❌ Fail"
-        return {"Check": "Row Count", "Column": "N/A", "Expected": f">= {min_rows}", "Actual": count, "Status": status, "Details": f"Rows: {count}"}
+        return {"Check": "Row Count", "Column": "N/A", "Expected": f">= {min_rows}",
+                "Actual": count, "Status": status, "Details": f"Actual rows: {count}, Minimum expected: {min_rows}"}
+
     def _run_duplicate_check(self, database, schema, table):
         columns = _get_column_details_for_dq(self.conn, database, schema, table)
         if not columns:
-            return {"Check": "Duplicates", "Column": "All", "Expected": "0", "Actual": "N/A", "Status": "⚠️ N/A", "Details": "No columns"}
+            return {"Check": "Duplicate Rows", "Column": "All", "Expected": "0",
+                    "Actual": "N/A", "Status": "⚠️ N/A", "Details": "No columns found"}
         cols_str = ", ".join([f'"{col["name"]}"' for col in columns])
         dup_count = self._execute_query(f"""
             SELECT COUNT(*) FROM (
@@ -306,29 +326,241 @@ class DataQualityValidator:
                 GROUP BY {cols_str} HAVING COUNT(*) > 1
             )""").iloc[0, 0]
         status = "✅ Pass" if dup_count == 0 else "❌ Fail"
-        return {"Check": "Duplicates", "Column": "All", "Expected": "0", "Actual": dup_count, "Status": status, "Details": f"Duplicates: {dup_count}"}
-    def run_checks(self, database, schema, table, check_row_count, min_rows, check_duplicates):
+        return {"Check": "Duplicate Rows", "Column": "All", "Expected": "0",
+                "Actual": dup_count, "Status": status, "Details": f"Number of duplicate rows: {dup_count}"}
+
+    # --- Null checks ---
+    def _run_column_null_pct_check(self, database, schema, table, selected_columns, threshold):
         results = []
-        total = passed = failed = 0
+        all_cols = _get_column_details_for_dq(self.conn, database, schema, table)
+        all_col_names = [c["name"] for c in all_cols]
+        cols_to_check = selected_columns if selected_columns else all_col_names
+        if not cols_to_check:
+            return [{"Check": "Column Null %", "Column": "N/A", "Expected": "N/A",
+                     "Actual": "N/A", "Status": "⚠️ Skip", "Details": "No columns to check"}]
+        total_rows = self._execute_query(f"SELECT COUNT(*) FROM {database}.{schema}.{table}").iloc[0, 0]
+        if total_rows == 0:
+            return [{"Check": "Column Null %", "Column": "N/A", "Expected": "N/A",
+                     "Actual": "N/A", "Status": "⚠️ N/A", "Details": "Table is empty"}]
+        for col in cols_to_check:
+            if col not in all_col_names:
+                results.append({"Check": "Column Null %", "Column": col, "Expected": f"<= {threshold}%",
+                                 "Actual": "N/A", "Status": "❌ Error", "Details": f"Column '{col}' not found"})
+                continue
+            null_count = self._execute_query(
+                f'SELECT COUNT(*) FROM {database}.{schema}.{table} WHERE "{col}" IS NULL').iloc[0, 0]
+            pct = (float(null_count) / float(total_rows)) * 100
+            status = "✅ Pass" if pct <= threshold else "❌ Fail"
+            results.append({"Check": "Column Null %", "Column": col,
+                             "Expected": f"<= {threshold}%", "Actual": f"{pct:.2f}%",
+                             "Status": status,
+                             "Details": f"Null count: {null_count}, Total rows: {total_rows}"})
+        return results
+
+    def _run_table_overall_null_pct_check(self, database, schema, table, threshold):
+        all_cols = _get_column_details_for_dq(self.conn, database, schema, table)
+        if not all_cols:
+            return {"Check": "Overall Null %", "Column": "All", "Expected": f"<= {threshold}%",
+                    "Actual": "N/A", "Status": "⚠️ N/A", "Details": "No columns found"}
+        total_rows = self._execute_query(f"SELECT COUNT(*) FROM {database}.{schema}.{table}").iloc[0, 0]
+        if total_rows == 0:
+            return {"Check": "Overall Null %", "Column": "All", "Expected": f"<= {threshold}%",
+                    "Actual": "N/A", "Status": "⚠️ N/A", "Details": "Table is empty"}
+        total_null_cells = sum(
+            self._execute_query(f'SELECT COUNT(*) FROM {database}.{schema}.{table} WHERE "{c["name"]}" IS NULL').iloc[0, 0]
+            for c in all_cols
+        )
+        total_cells = float(total_rows) * len(all_cols)
+        pct = (float(total_null_cells) / total_cells) * 100
+        status = "✅ Pass" if pct <= threshold else "❌ Fail"
+        return {"Check": "Overall Null %", "Column": "All Columns",
+                "Expected": f"<= {threshold}%", "Actual": f"{pct:.2f}%",
+                "Status": status,
+                "Details": f"Total null cells: {total_null_cells}, Total cells: {int(total_cells)}"}
+
+    # --- Value range check ---
+    def _run_value_range_check(self, database, schema, table, value_range_rows):
+        results = []
+        col_map = self._get_column_details_map(database, schema, table)
+        for row in value_range_rows:
+            col_name = str(row[0]).strip() if row[0] else ""
+            min_val_str = str(row[1]).strip() if row[1] else ""
+            max_val_str = str(row[2]).strip() if row[2] else ""
+            if not col_name or (not min_val_str and not max_val_str):
+                continue
+            col_detail = col_map.get(col_name.upper())
+            if not col_detail:
+                results.append({"Check": "Value Range", "Column": col_name, "Expected": "N/A",
+                                 "Actual": "N/A", "Status": "❌ Error", "Details": f"Column '{col_name}' not found"})
+                continue
+            col_type = col_detail["DATA_TYPE"]
+            if not any(t in col_type for t in ["NUMBER", "INT", "FLOAT", "DOUBLE", "DECIMAL", "NUMERIC"]):
+                results.append({"Check": "Value Range", "Column": col_name, "Expected": "Numeric Type",
+                                 "Actual": col_type, "Status": "❌ Error",
+                                 "Details": f"Column '{col_name}' is not numeric ({col_type})"})
+                continue
+            try:
+                where_parts = []
+                if min_val_str: where_parts.append(f'"{col_name}" < {float(min_val_str)}')
+                if max_val_str: where_parts.append(f'"{col_name}" > {float(max_val_str)}')
+                violations = self._execute_query(
+                    f'SELECT COUNT(*) FROM {database}.{schema}.{table} WHERE {" OR ".join(where_parts)}').iloc[0, 0]
+                range_str = f"[{min_val_str or '-∞'}, {max_val_str or '+∞'}]"
+                status = "✅ Pass" if violations == 0 else "❌ Fail"
+                results.append({"Check": "Value Range", "Column": col_name,
+                                 "Expected": range_str, "Actual": f"{violations} violations",
+                                 "Status": status, "Details": f"Out-of-range rows: {violations}"})
+            except Exception as e:
+                results.append({"Check": "Value Range", "Column": col_name, "Expected": "Valid range",
+                                 "Actual": "Error", "Status": "❌ Error", "Details": str(e)[:100]})
+        return results
+
+    # --- Date range check ---
+    def _run_date_range_check(self, database, schema, table, date_range_rows):
+        results = []
+        col_map = self._get_column_details_map(database, schema, table)
+        for row in date_range_rows:
+            col_name = str(row[0]).strip() if row[0] else ""
+            min_date = str(row[1]).strip() if row[1] else ""
+            max_date = str(row[2]).strip() if row[2] else ""
+            if not col_name or (not min_date and not max_date):
+                continue
+            col_detail = col_map.get(col_name.upper())
+            if not col_detail:
+                results.append({"Check": "Date Range", "Column": col_name, "Expected": "N/A",
+                                 "Actual": "N/A", "Status": "❌ Error", "Details": f"Column '{col_name}' not found"})
+                continue
+            col_type = col_detail["DATA_TYPE"]
+            if not any(t in col_type for t in ["DATE", "TIMESTAMP", "TIME"]):
+                results.append({"Check": "Date Range", "Column": col_name, "Expected": "Date/Timestamp Type",
+                                 "Actual": col_type, "Status": "❌ Error",
+                                 "Details": f"Column '{col_name}' is not a date/timestamp type ({col_type})"})
+                continue
+            try:
+                where_parts = []
+                if min_date: where_parts.append(f'"{col_name}" < \'{min_date}\'')
+                if max_date: where_parts.append(f'"{col_name}" > \'{max_date}\'')
+                violations = self._execute_query(
+                    f'SELECT COUNT(*) FROM {database}.{schema}.{table} WHERE {" OR ".join(where_parts)}').iloc[0, 0]
+                range_str = f"[{min_date or '-∞'}, {max_date or '+∞'}]"
+                status = "✅ Pass" if violations == 0 else "❌ Fail"
+                results.append({"Check": "Date Range", "Column": col_name,
+                                 "Expected": range_str, "Actual": f"{violations} violations",
+                                 "Status": status, "Details": f"Out-of-range rows: {violations}"})
+            except Exception as e:
+                results.append({"Check": "Date Range", "Column": col_name, "Expected": "Valid dates",
+                                 "Actual": "Error", "Status": "❌ Error", "Details": str(e)[:100]})
+        return results
+
+    # --- Regex pattern check ---
+    def _run_regex_pattern_check(self, database, schema, table, selected_columns, pattern):
+        if not pattern:
+            return []
+        all_cols = _get_column_details_for_dq(self.conn, database, schema, table)
+        string_cols = [c["name"] for c in all_cols if any(t in c["type"] for t in ["VARCHAR", "TEXT", "STRING", "CHAR"])]
+        cols_to_check = selected_columns if selected_columns else string_cols
+        if not cols_to_check:
+            return [{"Check": "Regex Pattern", "Column": "N/A", "Expected": f"Match '{pattern}'",
+                     "Actual": "N/A", "Status": "⚠️ Skip", "Details": "No string columns to check"}]
+        results = []
+        for col in cols_to_check:
+            col_meta = next((c for c in all_cols if c["name"] == col), None)
+            if not col_meta or not any(t in col_meta["type"] for t in ["VARCHAR", "TEXT", "STRING", "CHAR"]):
+                results.append({"Check": "Regex Pattern", "Column": col, "Expected": "String type",
+                                 "Actual": "N/A", "Status": "❌ Error",
+                                 "Details": f"Column '{col}' not found or not a string type"})
+                continue
+            try:
+                violations = self._execute_query(
+                    f"SELECT COUNT(*) FROM {database}.{schema}.{table} WHERE \"{col}\" NOT RLIKE '{pattern}' AND \"{col}\" IS NOT NULL").iloc[0, 0]
+                status = "✅ Pass" if violations == 0 else "❌ Fail"
+                results.append({"Check": "Regex Pattern", "Column": col,
+                                 "Expected": f"Match '{pattern}'", "Actual": f"{violations} violations",
+                                 "Status": status, "Details": f"Rows not matching pattern: {violations}"})
+            except Exception as e:
+                results.append({"Check": "Regex Pattern", "Column": col,
+                                 "Expected": f"Match '{pattern}'", "Actual": "Error",
+                                 "Status": "❌ Error", "Details": str(e)[:100]})
+        return results
+
+    # --- Foreign key check ---
+    def _run_foreign_key_check(self, database, schema, table, fk_col, ref_table, ref_col):
+        if not (fk_col and ref_table and ref_col):
+            return None
+        try:
+            violations = self._execute_query(f"""
+                SELECT COUNT(*) FROM {database}.{schema}.{table} t1
+                LEFT JOIN {database}.{schema}.{ref_table} t2
+                    ON t1."{fk_col}" = t2."{ref_col}"
+                WHERE t2."{ref_col}" IS NULL AND t1."{fk_col}" IS NOT NULL
+            """).iloc[0, 0]
+            status = "✅ Pass" if violations == 0 else "❌ Fail"
+            return {"Check": "Foreign Key", "Column": fk_col,
+                    "Expected": f"All keys exist in {ref_table}.{ref_col}",
+                    "Actual": f"{violations} unmatched keys",
+                    "Status": status,
+                    "Details": f"Unmatched FK rows: {violations}. {table}.{fk_col} -> {ref_table}.{ref_col}"}
+        except Exception as e:
+            return {"Check": "Foreign Key", "Column": fk_col,
+                    "Expected": f"FK to {ref_table}.{ref_col}",
+                    "Actual": "Error", "Status": "❌ Error", "Details": str(e)[:100]}
+
+    # --- Master run method ---
+    def run_checks(self, database, schema, table,
+                   check_row_count, min_rows,
+                   check_duplicates,
+                   check_col_null_pct, col_null_cols, col_null_threshold,
+                   check_table_null_pct, table_null_threshold,
+                   check_value_range, value_range_rows,
+                   check_date_range, date_range_rows,
+                   check_regex, regex_cols, regex_pattern,
+                   check_fk, fk_col, fk_ref_table, fk_ref_col):
+
+        all_results = []
+        total = passed = failed = errors = 0
+
+        def _add(res_or_list, penalty=10):
+            nonlocal total, passed, failed, errors
+            items = res_or_list if isinstance(res_or_list, list) else ([res_or_list] if res_or_list else [])
+            for r in items:
+                if r.get("Status") in ("⚠️ Skip", "⚠️ N/A"):
+                    continue
+                total += 1
+                all_results.append(r)
+                if r["Status"] == "✅ Pass":
+                    passed += 1
+                elif r["Status"] == "❌ Fail":
+                    failed += 1
+                elif r["Status"] == "❌ Error":
+                    errors += 1
+
         if check_row_count:
-            res = self._run_row_count_check(database, schema, table, min_rows)
-            results.append(res); total += 1
-            passed += 1 if res["Status"] == "✅ Pass" else 0
-            failed += 1 if res["Status"] != "✅ Pass" else 0
+            _add(self._run_row_count_check(database, schema, table, min_rows), 10)
         if check_duplicates:
-            res = self._run_duplicate_check(database, schema, table)
-            results.append(res); total += 1
-            passed += 1 if res["Status"] == "✅ Pass" else 0
-            failed += 1 if res["Status"] != "✅ Pass" else 0
-        score = (passed / total * 100) if total > 0 else 0
+            _add(self._run_duplicate_check(database, schema, table), 10)
+        if check_col_null_pct:
+            _add(self._run_column_null_pct_check(database, schema, table, col_null_cols, col_null_threshold), 5)
+        if check_table_null_pct:
+            _add(self._run_table_overall_null_pct_check(database, schema, table, table_null_threshold), 15)
+        if check_value_range and value_range_rows:
+            _add(self._run_value_range_check(database, schema, table, value_range_rows), 5)
+        if check_date_range and date_range_rows:
+            _add(self._run_date_range_check(database, schema, table, date_range_rows), 5)
+        if check_regex and regex_pattern:
+            _add(self._run_regex_pattern_check(database, schema, table, regex_cols, regex_pattern), 5)
+        if check_fk:
+            _add(self._run_foreign_key_check(database, schema, table, fk_col, fk_ref_table, fk_ref_col), 15)
+
+        score = max(0, (passed / total * 100) if total > 0 else 0)
         summary = pd.DataFrame([
             {"Metric": "Table", "Value": f"{database}.{schema}.{table}"},
             {"Metric": "Total Checks", "Value": total},
-            {"Metric": "Passed", "Value": passed},
-            {"Metric": "Failed", "Value": failed},
-            {"Metric": "Score", "Value": f"{score:.1f}%"}
+            {"Metric": "Passed ✅", "Value": passed},
+            {"Metric": "Failed ❌", "Value": failed},
+            {"Metric": "Errors ⚠️", "Value": errors},
+            {"Metric": "Quality Score", "Value": f"{score:.1f}%"}
         ])
-        return summary, pd.DataFrame(results), score
+        return summary, pd.DataFrame(all_results), score
 
 
 # ========== PERFORMANCE MONITORING FUNCTIONS ==========
@@ -889,35 +1121,192 @@ def show_main_app():
                         tables = get_tables(st.session_state.conn, dq_db, dq_schema)
                         dq_table = st.selectbox("Table", tables, key="dq_table")
                         if dq_table:
-                            st.subheader("Quality Checks")
-                            dq_row_count = st.checkbox("Row Count Check", value=True, key="dq_row")
-                            dq_min_rows = st.number_input("Minimum Rows", value=1, min_value=0, key="dq_min") if dq_row_count else 1
-                            dq_duplicates = st.checkbox("Duplicate Rows Check", value=True, key="dq_dup")
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            if st.button("Run Quality Checks", type="primary", use_container_width=True):
+                            # Fetch columns for this table (used by multiple checks)
+                            all_col_details = _get_column_details_for_dq(
+                                st.session_state.conn, dq_db, dq_schema, dq_table)
+                            all_col_names = [c["name"] for c in all_col_details]
+                            num_cols = [c["name"] for c in all_col_details
+                                        if any(t in c["type"] for t in ["NUMBER","INT","FLOAT","DOUBLE","DECIMAL","NUMERIC"])]
+                            date_cols_list = [c["name"] for c in all_col_details
+                                              if any(t in c["type"] for t in ["DATE","TIMESTAMP","TIME"])]
+                            str_cols = [c["name"] for c in all_col_details
+                                        if any(t in c["type"] for t in ["VARCHAR","TEXT","STRING","CHAR"])]
+
+                            st.markdown("---")
+                            st.markdown("#### ✅ Select Checks to Run")
+
+                            # --- Check 1: Row Count ---
+                            dq_row_count = st.checkbox("📊 Row Count Check", value=True, key="dq_row")
+                            dq_min_rows = 1
+                            if dq_row_count:
+                                dq_min_rows = st.number_input("Minimum expected rows", value=1, min_value=0, key="dq_min")
+
+                            st.markdown("---")
+
+                            # --- Check 2: Duplicates ---
+                            dq_duplicates = st.checkbox("🔁 Duplicate Rows Check", value=True, key="dq_dup")
+
+                            st.markdown("---")
+
+                            # --- Check 3: Column Null % ---
+                            dq_col_null = st.checkbox("🔍 Column Null % Check", value=False, key="dq_col_null")
+                            dq_col_null_cols = []
+                            dq_col_null_threshold = 5.0
+                            if dq_col_null:
+                                dq_col_null_cols = st.multiselect(
+                                    "Columns to check (empty = all columns)",
+                                    all_col_names, key="dq_col_null_cols")
+                                dq_col_null_threshold = st.number_input(
+                                    "Max allowed null % per column", value=5.0,
+                                    min_value=0.0, max_value=100.0, step=0.5, key="dq_col_null_thr")
+
+                            st.markdown("---")
+
+                            # --- Check 4: Overall Table Null % ---
+                            dq_table_null = st.checkbox("📋 Overall Table Null % Check", value=False, key="dq_tbl_null")
+                            dq_table_null_threshold = 10.0
+                            if dq_table_null:
+                                dq_table_null_threshold = st.number_input(
+                                    "Max allowed overall null %", value=10.0,
+                                    min_value=0.0, max_value=100.0, step=0.5, key="dq_tbl_null_thr")
+
+                            st.markdown("---")
+
+                            # --- Check 5: Value Range (numeric) ---
+                            dq_val_range = st.checkbox("🔢 Value Range Check (Numeric Columns)", value=False, key="dq_val_range")
+                            dq_val_range_rows = []
+                            if dq_val_range:
+                                if num_cols:
+                                    st.caption("Define min/max for each numeric column (leave blank to skip that bound)")
+                                    vr_col_sel = st.multiselect("Select numeric columns", num_cols, key="dq_vr_cols")
+                                    for vc in vr_col_sel:
+                                        vrc1, vrc2 = st.columns(2)
+                                        vmin = vrc1.text_input(f"{vc} — Min", key=f"dq_vr_min_{vc}", placeholder="e.g. 0")
+                                        vmax = vrc2.text_input(f"{vc} — Max", key=f"dq_vr_max_{vc}", placeholder="e.g. 1000000")
+                                        if vmin or vmax:
+                                            dq_val_range_rows.append((vc, vmin, vmax))
+                                else:
+                                    st.info("No numeric columns detected in this table.")
+
+                            st.markdown("---")
+
+                            # --- Check 6: Date Range ---
+                            dq_date_range = st.checkbox("📅 Date Range Check", value=False, key="dq_date_range")
+                            dq_date_range_rows = []
+                            if dq_date_range:
+                                if date_cols_list:
+                                    st.caption("Define min/max dates for each date column (YYYY-MM-DD)")
+                                    dr_col_sel = st.multiselect("Select date columns", date_cols_list, key="dq_dr_cols")
+                                    for dc in dr_col_sel:
+                                        drc1, drc2 = st.columns(2)
+                                        dmin = drc1.text_input(f"{dc} — Min date", key=f"dq_dr_min_{dc}", placeholder="e.g. 2020-01-01")
+                                        dmax = drc2.text_input(f"{dc} — Max date", key=f"dq_dr_max_{dc}", placeholder="e.g. 2025-12-31")
+                                        if dmin or dmax:
+                                            dq_date_range_rows.append((dc, dmin, dmax))
+                                else:
+                                    st.info("No date/timestamp columns detected in this table.")
+
+                            st.markdown("---")
+
+                            # --- Check 7: Regex Pattern ---
+                            dq_regex = st.checkbox("🔤 Regex Pattern Check (String Columns)", value=False, key="dq_regex")
+                            dq_regex_cols = []
+                            dq_regex_pattern = ""
+                            if dq_regex:
+                                if str_cols:
+                                    dq_regex_cols = st.multiselect(
+                                        "Columns to check (empty = all string columns)",
+                                        str_cols, key="dq_regex_cols")
+                                    dq_regex_pattern = st.text_input(
+                                        "Regex pattern (Snowflake RLIKE syntax)",
+                                        placeholder=r"e.g. ^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$",
+                                        key="dq_regex_pat")
+                                    if dq_regex_pattern:
+                                        st.caption(f"Will flag rows where value does NOT match: `{dq_regex_pattern}`")
+                                else:
+                                    st.info("No string columns detected in this table.")
+
+                            st.markdown("---")
+
+                            # --- Check 8: Foreign Key ---
+                            dq_fk = st.checkbox("🔗 Foreign Key Check", value=False, key="dq_fk")
+                            dq_fk_col = dq_fk_ref_table = dq_fk_ref_col = ""
+                            if dq_fk:
+                                all_tbls = get_tables(st.session_state.conn, dq_db, dq_schema)
+                                fk1, fk2, fk3 = st.columns(3)
+                                dq_fk_col = fk1.selectbox("FK Column (this table)", [""] + all_col_names, key="dq_fk_col")
+                                dq_fk_ref_table = fk2.selectbox("Referenced Table", [""] + all_tbls, key="dq_fk_ref_tbl")
+                                if dq_fk_ref_table:
+                                    ref_cols = get_columns_for_table(st.session_state.conn, dq_db, dq_schema, dq_fk_ref_table)
+                                    dq_fk_ref_col = fk3.selectbox("Referenced Column", [""] + ref_cols, key="dq_fk_ref_col")
+
+                            st.markdown("---")
+
+                            if st.button("🚀 Run Quality Checks", type="primary", use_container_width=True):
                                 with st.spinner("Running checks..."):
-                                    validator = DataQualityValidator(st.session_state.conn)
-                                    summary, details, score = validator.run_checks(dq_db, dq_schema, dq_table, dq_row_count, dq_min_rows, dq_duplicates)
-                                    st.session_state.dq_summary = summary
-                                    st.session_state.dq_details = details
-                                    st.session_state.dq_score = score
-                                    st.success("✅ Quality checks completed!")
+                                    try:
+                                        validator = DataQualityValidator(st.session_state.conn)
+                                        summary, details, score = validator.run_checks(
+                                            dq_db, dq_schema, dq_table,
+                                            dq_row_count, dq_min_rows,
+                                            dq_duplicates,
+                                            dq_col_null, dq_col_null_cols, dq_col_null_threshold,
+                                            dq_table_null, dq_table_null_threshold,
+                                            dq_val_range, dq_val_range_rows,
+                                            dq_date_range, dq_date_range_rows,
+                                            dq_regex, dq_regex_cols, dq_regex_pattern,
+                                            dq_fk, dq_fk_col, dq_fk_ref_table, dq_fk_ref_col
+                                        )
+                                        st.session_state.dq_summary = summary
+                                        st.session_state.dq_details = details
+                                        st.session_state.dq_score = score
+                                        st.success("✅ Quality checks completed!")
+                                    except Exception as e:
+                                        st.error(f"❌ Error running checks: {str(e)}")
+
             with col2:
                 st.subheader("📊 Results")
                 if 'dq_score' in st.session_state:
                     score = st.session_state.dq_score
                     score_class = "passed-score" if score >= 80 else ("warning-score" if score >= 50 else "failed-score")
-                    st.markdown(f'<div class="score-box {score_class}">Quality Score: {score:.0f}/100</div>', unsafe_allow_html=True)
-                sub_tab1, sub_tab2 = st.tabs(["Summary", "Details"])
-                with sub_tab1:
+                    st.markdown(
+                        f'<div class="score-box {score_class}">Quality Score: {score:.0f}/100</div>',
+                        unsafe_allow_html=True)
+
+                    # Quick metric bar
+                    if 'dq_details' in st.session_state and not st.session_state.dq_details.empty:
+                        det = st.session_state.dq_details
+                        mc1, mc2, mc3, mc4 = st.columns(4)
+                        mc1.metric("Total Checks", len(det))
+                        mc2.metric("✅ Passed", len(det[det["Status"] == "✅ Pass"]))
+                        mc3.metric("❌ Failed", len(det[det["Status"] == "❌ Fail"]))
+                        mc4.metric("⚠️ Errors", len(det[det["Status"] == "❌ Error"]))
+
+                dq_tab1, dq_tab2 = st.tabs(["📋 Summary", "🔍 Check Details"])
+                with dq_tab1:
                     if 'dq_summary' in st.session_state and not st.session_state.dq_summary.empty:
                         st.dataframe(st.session_state.dq_summary, use_container_width=True)
-                    else: st.info("Run checks to see summary")
-                with sub_tab2:
+                    else:
+                        st.info("Configure and run checks to see results here.")
+                with dq_tab2:
                     if 'dq_details' in st.session_state and not st.session_state.dq_details.empty:
-                        st.dataframe(st.session_state.dq_details, use_container_width=True)
-                        st.download_button("📥 Download Report", st.session_state.dq_details.to_csv(index=False), f"dq_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
-                    else: st.info("Run checks to see details")
+                        det = st.session_state.dq_details
+
+                        # Color-coded filter
+                        status_filter = st.selectbox(
+                            "Filter by status", ["All", "✅ Pass", "❌ Fail", "❌ Error"],
+                            key="dq_status_filter")
+                        if status_filter != "All":
+                            det = det[det["Status"] == status_filter]
+
+                        st.dataframe(det, use_container_width=True)
+                        st.download_button(
+                            "📥 Download Full Report",
+                            st.session_state.dq_details.to_csv(index=False),
+                            f"dq_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            key="dq_dl_btn")
+                    else:
+                        st.info("Run checks to see detailed results here.")
 
     # ===== PERFORMANCE MONITORING (NEW TAB - FIXED) =====
     with tab3:

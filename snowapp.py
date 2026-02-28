@@ -13,6 +13,24 @@ import os
 from PIL import Image
 import io
 
+# Create a simple base64 encoded logo FIRST
+def get_logo_base64():
+    """Create a simple base64 encoded SVG logo"""
+    svg_logo = '''
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="40" height="40" rx="8" fill="url(#grad)" />
+        <defs>
+            <linearGradient id="grad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#667eea"/>
+                <stop offset="1" stop-color="#764ba2"/>
+            </linearGradient>
+        </defs>
+        <text x="8" y="28" font-family="Arial" font-size="20" fill="white" font-weight="bold">DS</text>
+    </svg>
+    '''
+    return base64.b64encode(svg_logo.encode('utf-8')).decode('utf-8')
+
+# Then define the image loader function
 def get_image_base64(image_path):
     """Convert an image file to base64 string"""
     try:
@@ -31,24 +49,7 @@ else:
     logo_base64 = get_logo_base64()
     logo_mime = "image/svg+xml"
 
-# Create a simple base64 encoded logo (you can replace this with your own logo)
-def get_logo_base64():
-    """Create a simple base64 encoded SVG logo"""
-    svg_logo = '''
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="40" height="40" rx="8" fill="url(#grad)" />
-        <defs>
-            <linearGradient id="grad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#667eea"/>
-                <stop offset="1" stop-color="#764ba2"/>
-            </linearGradient>
-        </defs>
-        <text x="8" y="28" font-family="Arial" font-size="20" fill="white" font-weight="bold">DS</text>
-    </svg>
-    '''
-    return base64.b64encode(svg_logo.encode('utf-8')).decode('utf-8')
-
-logo_base64 = get_logo_base64()
+# REMOVE this duplicate line: logo_base64 = get_logo_base64()
 
 try:
     from matplotlib import pyplot as plt
@@ -1040,7 +1041,7 @@ def show_main_app():
     st.markdown(f"""
     <div class="header-full">
         <div class="header-logo">
-            <img src="data:image/png;base64,{logo_base64}" alt="DeploySure Logo">
+            <img src="data:{logo_mime};base64,{logo_base64}" alt="DeploySure Logo">
         </div>
         <div class="header-text">
             <h1>DeploySure Suite</h1>

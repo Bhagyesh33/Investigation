@@ -1341,7 +1341,7 @@ def show_main_app():
     with tab3:
         st.header("📊 Performance Monitoring & Cost Analysis")
 
-        # ---- Global Filters (resolve dates BEFORE columns to avoid scoping bugs) ----
+        # ---- Global Filters ----
         with st.expander("🔧 Global Filters", expanded=True):
             fcol1, fcol2 = st.columns(2)
             with fcol1:
@@ -1351,29 +1351,28 @@ def show_main_app():
                     key="perf_time_range"
                 )
             with fcol2:
-                # Resolve default dates first so they're always available
                 _default_start, _default_end = get_date_range(time_range_opt)
                 if time_range_opt == "Custom":
                     perf_start = st.text_input("Start Date (YYYY-MM-DD)", value=_default_start, key="perf_start_custom")
-                    perf_end = st.text_input("End Date (YYYY-MM-DD)", value=_default_end, key="perf_end_custom")
+                    perf_end   = st.text_input("End Date (YYYY-MM-DD)",   value=_default_end,   key="perf_end_custom")
                 else:
                     perf_start = _default_start
-                    perf_end = _default_end
+                    perf_end   = _default_end
                     st.info(f"📅 {perf_start}  →  {perf_end}")
 
             fcol3, fcol4, fcol5, fcol6 = st.columns(4)
             with fcol3:
                 perf_warehouses = get_all_warehouses(st.session_state.conn)
-                perf_warehouse = st.selectbox("Warehouse", perf_warehouses, key="perf_warehouse")
+                perf_warehouse  = st.selectbox("Warehouse", perf_warehouses, key="perf_warehouse")
             with fcol4:
                 perf_dbs = ["All"] + get_databases(st.session_state.conn)
-                perf_db = st.selectbox("Database", perf_dbs, key="perf_db")
+                perf_db  = st.selectbox("Database", perf_dbs, key="perf_db")
             with fcol5:
                 perf_schemas_list = ["All"] + (get_schemas(st.session_state.conn, perf_db) if perf_db != "All" else [])
                 perf_schema = st.selectbox("Schema", perf_schemas_list, key="perf_schema")
             with fcol6:
                 perf_users = get_all_users(st.session_state.conn)
-                perf_user = st.selectbox("User", perf_users, key="perf_user")
+                perf_user  = st.selectbox("User", perf_users, key="perf_user")
 
             perf_query_type = st.selectbox(
                 "Query Type", ["All", "SELECT", "INSERT", "UPDATE", "DELETE", "MERGE"],
@@ -1386,7 +1385,114 @@ def show_main_app():
             "💰 Compute Cost", "🗄️ Storage", "🏭 Warehouse Activity"
         ])
 
-        # ---- USER ADOPTION ----
+        # =========================================================
+        # Helper: render a horizontal bar chart (always works)
+        # =========================================================
+        def _hbar_chart(df, label_col, value_col, title, color="#4C72B0"):
+            """Render a horizontal bar chart using st.bar_chart (native) or matplotlib."""
+            if df is None or df.empty:
+                return
+            df = df.copy()
+            df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
+            df = df.nlargest(10, value_col).sort_values(value_col)
+
+            if MATPLOTLIB_AVAILABLE:
+                fig, ax = plt.subplots(figsize=(10, max(3, len(df) * 0.5)))
+                ax.barh(df[label_col].astype(str), df[value_col], color=color)
+                ax.set_xlabel(value_col)
+                ax.set_title(title)
+                ax.grid(axis='x', alpha=0.3)
+                plt.tight_layout()
+                st.pyplot(fig); plt.close()
+            else:
+                chart_df = df.set_index(label_col)[[value_col]]
+                st.markdown(f"**{title}**")
+                st.bar_chart(chart_df)
+
+        def _line_chart(df, date_col, value_col, title, color="#2E86C1"):
+            """Render a line chart using matplotlib or st.line_chart."""
+            if df is None or df.empty:
+                return
+            df = df.copy()
+            df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
+
+            if MATPLOTLIB_AVAILABLE:
+                fig, ax = plt.subplots(figsize=(10, 4))
+                try:
+                    df[date_col] = pd.to_datetime(df[date_col])
+                    df = df.sort_values(date_col)
+                except Exception:
+                    pass
+                ax.plot(df[date_col].astype(str), df[value_col], marker='o', color=color, linewidth=2)
+                ax.set_xlabel(date_col); ax.set_ylabel(value_col)
+                ax.set_title(title); ax.grid(True, alpha=0.3)
+                plt.xticks(rotation=45, ha='right'); plt.tight_layout()
+                st.pyplot(fig); plt.close()
+            else:
+                try:
+                    df[date_col] = pd.to_datetime(df[date_col])
+                    df = df.sort_values(date_col)
+                except Exception:
+                    pass
+                chart_df = df.set_index(date_col)[[value_col]]
+                st.markdown(f"**{title}**")
+                st.line_chart(chart_df)
+
+        def _area_chart(df, date_col, value_col, title):
+            """Render an area/fill chart."""
+            if df is None or df.empty:
+                return
+            df = df.copy()
+            df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
+
+            if MATPLOTLIB_AVAILABLE:
+                fig, ax = plt.subplots(figsize=(10, 4))
+                try:
+                    df[date_col] = pd.to_datetime(df[date_col])
+                    df = df.sort_values(date_col)
+                except Exception:
+                    pass
+                vals = df[value_col].values
+                labels = df[date_col].astype(str).values
+                ax.fill_between(range(len(vals)), vals, color='lightgreen', alpha=0.7)
+                ax.plot(range(len(vals)), vals, color='darkgreen', marker='o', linewidth=2)
+                ax.set_xticks(range(len(vals)))
+                ax.set_xticklabels(labels, rotation=45, ha='right')
+                ax.set_ylabel(value_col); ax.set_title(title)
+                ax.grid(True, alpha=0.3); plt.tight_layout()
+                st.pyplot(fig); plt.close()
+            else:
+                try:
+                    df[date_col] = pd.to_datetime(df[date_col])
+                    df = df.sort_values(date_col)
+                except Exception:
+                    pass
+                chart_df = df.set_index(date_col)[[value_col]]
+                st.markdown(f"**{title}**")
+                st.area_chart(chart_df)
+
+        def _stacked_bar(df, group_col, value_cols, title):
+            """Render a stacked bar chart."""
+            if df is None or df.empty:
+                return
+            for c in value_cols:
+                df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
+            grp = df.groupby(group_col)[value_cols].sum()
+
+            if MATPLOTLIB_AVAILABLE:
+                fig, ax = plt.subplots(figsize=(10, 5))
+                grp.plot(kind='bar', stacked=True, ax=ax, colormap='coolwarm')
+                ax.set_xlabel(group_col); ax.set_ylabel("Credits")
+                ax.set_title(title)
+                plt.xticks(rotation=45, ha='right'); plt.tight_layout()
+                st.pyplot(fig); plt.close()
+            else:
+                st.markdown(f"**{title}**")
+                st.bar_chart(grp)
+
+        # =========================================================
+        # 👤 USER ADOPTION
+        # =========================================================
         with perf_tab1:
             st.subheader("👤 User Adoption")
             if st.button("🔄 Load User Adoption Data", key="load_ua", type="primary"):
@@ -1395,33 +1501,26 @@ def show_main_app():
                     try:
                         st.session_state.ua_top_users = fetch_top_active_users(
                             st.session_state.conn, perf_start, perf_end,
-                            perf_db, perf_schema, perf_query_type
-                        )
+                            perf_db, perf_schema, perf_query_type)
                     except Exception as e:
-                        errors.append(f"Top Users: {str(e)}")
+                        errors.append(f"Top Users: {e}")
                         st.session_state.ua_top_users = pd.DataFrame()
-
                     try:
                         st.session_state.ua_over_time = fetch_active_users_over_time(
                             st.session_state.conn, perf_start, perf_end,
-                            perf_db, perf_schema, perf_warehouse, perf_user, perf_query_type
-                        )
+                            perf_db, perf_schema, perf_warehouse, perf_user, perf_query_type)
                     except Exception as e:
-                        errors.append(f"Users Over Time: {str(e)}")
+                        errors.append(f"Users Over Time: {e}")
                         st.session_state.ua_over_time = pd.DataFrame()
-
                     try:
                         st.session_state.ua_queries_per_user = fetch_queries_per_user(
                             st.session_state.conn, perf_start, perf_end,
-                            perf_db, perf_schema, perf_warehouse, perf_user
-                        )
+                            perf_db, perf_schema, perf_warehouse, perf_user)
                     except Exception as e:
-                        errors.append(f"Queries Per User: {str(e)}")
+                        errors.append(f"Queries Per User: {e}")
                         st.session_state.ua_queries_per_user = pd.DataFrame()
-
                     if errors:
-                        for err in errors:
-                            st.error(f"❌ {err}")
+                        for err in errors: st.error(f"❌ {err}")
                     else:
                         st.success("✅ Data loaded!")
 
@@ -1432,17 +1531,8 @@ def show_main_app():
                     st.dataframe(st.session_state.ua_top_users, use_container_width=True)
                     st.download_button("📥 Download", st.session_state.ua_top_users.to_csv(index=False),
                                        f"top_users_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_ua_users")
-                    if MATPLOTLIB_AVAILABLE:
-                        df_p = st.session_state.ua_top_users.copy()
-                        if "Query Count" in df_p.columns and "User" in df_p.columns:
-                            fig, ax = plt.subplots(figsize=(8, 4))
-                            df_p["Query Count"] = pd.to_numeric(df_p["Query Count"], errors='coerce').fillna(0)
-                            df_p = df_p.nlargest(10, "Query Count").sort_values("Query Count")
-                            ax.barh(df_p["User"].astype(str), df_p["Query Count"], color='steelblue')
-                            ax.set_xlabel("Query Count")
-                            ax.set_title("Top Users by Query Count")
-                            plt.tight_layout()
-                            st.pyplot(fig); plt.close()
+                    _hbar_chart(st.session_state.ua_top_users, "User", "Query Count",
+                                "Top Users by Query Count", color="steelblue")
                 else:
                     st.info("Click 'Load User Adoption Data' to see results.")
 
@@ -1452,27 +1542,20 @@ def show_main_app():
                     st.dataframe(st.session_state.ua_over_time, use_container_width=True)
                     st.download_button("📥 Download", st.session_state.ua_over_time.to_csv(index=False),
                                        f"users_over_time_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_ua_time")
-                    if MATPLOTLIB_AVAILABLE:
-                        df_p = st.session_state.ua_over_time.copy()
-                        if "Date" in df_p.columns and "Active Users" in df_p.columns:
-                            fig, ax = plt.subplots(figsize=(8, 4))
-                            df_p["Date"] = pd.to_datetime(df_p["Date"])
-                            df_p["Active Users"] = pd.to_numeric(df_p["Active Users"], errors='coerce').fillna(0)
-                            df_p = df_p.sort_values("Date")
-                            ax.plot(df_p["Date"], df_p["Active Users"], marker='o', color='purple', linewidth=2)
-                            ax.set_xlabel("Date"); ax.set_ylabel("Active Users")
-                            ax.set_title("Active Users Over Time")
-                            ax.grid(True, alpha=0.3)
-                            plt.xticks(rotation=45); plt.tight_layout()
-                            st.pyplot(fig); plt.close()
+                    _line_chart(st.session_state.ua_over_time, "Date", "Active Users",
+                                "Active Users Over Time", color="purple")
                 else:
                     st.info("Click 'Load User Adoption Data' to see results.")
 
             if 'ua_queries_per_user' in st.session_state and not st.session_state.ua_queries_per_user.empty:
-                st.markdown("#### 📊 Queries Per User")
+                st.markdown("#### 📊 Query Execution Count by User")
                 st.dataframe(st.session_state.ua_queries_per_user, use_container_width=True)
+                _hbar_chart(st.session_state.ua_queries_per_user, "User", "Total Queries",
+                            "Total Queries per User", color="mediumseagreen")
 
-        # ---- QUERY PERFORMANCE ----
+        # =========================================================
+        # ⚡ QUERY PERFORMANCE
+        # =========================================================
         with perf_tab2:
             st.subheader("⚡ Query Performance")
             if st.button("🔄 Load Query Performance Data", key="load_qp", type="primary"):
@@ -1488,7 +1571,7 @@ def show_main_app():
                         try:
                             st.session_state[key] = fetch_fn()
                         except Exception as e:
-                            errors.append(f"{label}: {str(e)}")
+                            errors.append(f"{label}: {e}")
                             st.session_state[key] = pd.DataFrame()
                     if errors:
                         for err in errors: st.error(f"❌ {err}")
@@ -1496,107 +1579,141 @@ def show_main_app():
                         st.success("✅ Data loaded!")
 
             qp_sub1, qp_sub2, qp_sub3, qp_sub4, qp_sub5 = st.tabs([
-                "⏱ Longest Running", "💸 Most Expensive", "🔁 Most Frequent", "❌ Failed", "🔍 Query Profile"
+                "⏱ Longest Running", "💸 Most Expensive (Bytes)", "🔁 Most Frequent", "❌ Failed", "🔍 Query Profile"
             ])
 
-            def _show_qp_tab(state_key, chart_x, chart_y, chart_color, chart_title, dl_key):
-                if state_key in st.session_state and not st.session_state[state_key].empty:
-                    st.dataframe(st.session_state[state_key], use_container_width=True)
-                    st.download_button("📥 Download", st.session_state[state_key].to_csv(index=False),
-                                       f"{state_key}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key=dl_key)
-                    if MATPLOTLIB_AVAILABLE and chart_x and chart_y:
-                        df_p = st.session_state[state_key].copy()
-                        if chart_x in df_p.columns and chart_y in df_p.columns:
-                            fig, ax = plt.subplots(figsize=(10, 4))
-                            df_p[chart_y] = pd.to_numeric(df_p[chart_y], errors='coerce').fillna(0)
-                            df_p = df_p.sort_values(chart_y).tail(10)
-                            ax.barh(df_p[chart_x].astype(str), df_p[chart_y], color=chart_color)
-                            ax.set_xlabel(chart_y); ax.set_title(chart_title)
-                            plt.tight_layout(); st.pyplot(fig); plt.close()
+            with qp_sub1:
+                if 'qp_longest' in st.session_state and not st.session_state.qp_longest.empty:
+                    st.dataframe(st.session_state.qp_longest, use_container_width=True)
+                    st.download_button("📥 Download", st.session_state.qp_longest.to_csv(index=False),
+                                       f"longest_queries_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_qp_long")
+                    _hbar_chart(st.session_state.qp_longest, "Query ID", "Exec Time (s)",
+                                "Top 10 Longest Running Queries (seconds)", color="tomato")
                 else:
                     st.info("Click 'Load Query Performance Data' to see results.")
 
-            with qp_sub1:
-                _show_qp_tab("qp_longest", "Query ID", "Exec Time (s)", "tomato", "Top 10 Longest Running Queries", "dl_qp_long")
             with qp_sub2:
-                _show_qp_tab("qp_expensive", "Query ID", "Bytes Scanned", "salmon", "Top 10 Queries by Bytes Scanned", "dl_qp_exp")
+                if 'qp_expensive' in st.session_state and not st.session_state.qp_expensive.empty:
+                    st.dataframe(st.session_state.qp_expensive, use_container_width=True)
+                    st.download_button("📥 Download", st.session_state.qp_expensive.to_csv(index=False),
+                                       f"expensive_queries_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_qp_exp")
+                    _hbar_chart(st.session_state.qp_expensive, "Query ID", "Bytes Scanned",
+                                "Top 10 Queries by Bytes Scanned", color="salmon")
+                else:
+                    st.info("Click 'Load Query Performance Data' to see results.")
+
             with qp_sub3:
-                _show_qp_tab("qp_frequent", "Query Preview", "Execution Count", "cornflowerblue", "Top 10 Most Frequent Queries", "dl_qp_freq")
+                if 'qp_frequent' in st.session_state and not st.session_state.qp_frequent.empty:
+                    st.dataframe(st.session_state.qp_frequent, use_container_width=True)
+                    st.download_button("📥 Download", st.session_state.qp_frequent.to_csv(index=False),
+                                       f"frequent_queries_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_qp_freq")
+                    _hbar_chart(st.session_state.qp_frequent, "Query Preview", "Execution Count",
+                                "Top 10 Most Frequent Queries", color="cornflowerblue")
+                else:
+                    st.info("Click 'Load Query Performance Data' to see results.")
+
             with qp_sub4:
                 if 'qp_failed' in st.session_state and not st.session_state.qp_failed.empty:
-                    st.metric("Total Failed Queries", len(st.session_state.qp_failed))
-                    st.dataframe(st.session_state.qp_failed, use_container_width=True)
-                    st.download_button("📥 Download", st.session_state.qp_failed.to_csv(index=False),
+                    df_f = st.session_state.qp_failed
+                    st.metric("Total Failed Queries", len(df_f))
+                    # Pie of error types if available
+                    if MATPLOTLIB_AVAILABLE and "Status" in df_f.columns:
+                        status_counts = df_f["Status"].value_counts()
+                        fig, ax = plt.subplots(figsize=(5, 4))
+                        ax.pie(status_counts.values, labels=status_counts.index, autopct='%1.0f%%', startangle=90)
+                        ax.set_title("Failed Query Status Breakdown")
+                        plt.tight_layout()
+                        st.pyplot(fig); plt.close()
+                    st.dataframe(df_f, use_container_width=True)
+                    st.download_button("📥 Download", df_f.to_csv(index=False),
                                        f"failed_queries_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_qp_fail")
                 else:
                     st.info("Click 'Load Query Performance Data' to see results.")
+
             with qp_sub5:
                 if 'qp_profile' in st.session_state and not st.session_state.qp_profile.empty:
-                    st.dataframe(st.session_state.qp_profile, use_container_width=True)
-                    st.download_button("📥 Download", st.session_state.qp_profile.to_csv(index=False),
+                    df_prof = st.session_state.qp_profile
+                    st.dataframe(df_prof, use_container_width=True)
+                    # Compile vs Execute time comparison
+                    if MATPLOTLIB_AVAILABLE and "Compile (s)" in df_prof.columns and "Exec (s)" in df_prof.columns:
+                        fig, ax = plt.subplots(figsize=(10, 4))
+                        df_p = df_prof.copy()
+                        df_p["Compile (s)"] = pd.to_numeric(df_p["Compile (s)"], errors='coerce').fillna(0)
+                        df_p["Exec (s)"] = pd.to_numeric(df_p["Exec (s)"], errors='coerce').fillna(0)
+                        x = range(len(df_p))
+                        ax.bar([i - 0.2 for i in x], df_p["Compile (s)"], 0.4, label="Compile", color="steelblue")
+                        ax.bar([i + 0.2 for i in x], df_p["Exec (s)"], 0.4, label="Execute", color="tomato")
+                        ax.set_xlabel("Query"); ax.set_ylabel("Seconds")
+                        ax.set_title("Compile vs Execute Time per Query")
+                        ax.set_xticks(list(x)); ax.set_xticklabels(df_p["Query ID"].astype(str), rotation=45, ha='right')
+                        ax.legend(); plt.tight_layout()
+                        st.pyplot(fig); plt.close()
+                    else:
+                        # Native fallback
+                        cols = [c for c in ["Compile (s)", "Exec (s)"] if c in df_prof.columns]
+                        if cols:
+                            st.markdown("**Compile vs Execute Time**")
+                            chart_df = df_prof[cols].apply(pd.to_numeric, errors='coerce').fillna(0)
+                            st.bar_chart(chart_df)
+                    st.download_button("📥 Download", df_prof.to_csv(index=False),
                                        f"query_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_qp_prof")
                 else:
                     st.info("Click 'Load Query Performance Data' to see results.")
 
-        # ---- COMPUTE COST ----
+        # =========================================================
+        # 💰 COMPUTE COST
+        # =========================================================
         with perf_tab3:
             st.subheader("💰 Compute Cost Analysis")
             if st.button("🔄 Load Cost Data", key="load_cc", type="primary"):
                 with st.spinner("Loading..."):
                     errors = []
                     try:
-                        st.session_state.cc_credits = fetch_warehouse_credits(st.session_state.conn, perf_start, perf_end, perf_warehouse)
+                        st.session_state.cc_credits = fetch_warehouse_credits(
+                            st.session_state.conn, perf_start, perf_end, perf_warehouse)
                     except Exception as e:
-                        errors.append(f"Warehouse Credits: {str(e)}")
+                        errors.append(f"Warehouse Credits: {e}")
                         st.session_state.cc_credits = pd.DataFrame()
                     try:
-                        result, date_col = fetch_credit_usage_over_time(st.session_state.conn, perf_start, perf_end, perf_warehouse)
-                        st.session_state.cc_over_time = result
-                        st.session_state.cc_date_col = date_col
+                        result = fetch_credit_usage_over_time(
+                            st.session_state.conn, perf_start, perf_end, perf_warehouse)
+                        st.session_state.cc_over_time = result[0]
+                        st.session_state.cc_date_col  = result[1]
                     except Exception as e:
-                        errors.append(f"Credit Usage Over Time: {str(e)}")
+                        errors.append(f"Credits Over Time: {e}")
                         st.session_state.cc_over_time = pd.DataFrame()
-                        st.session_state.cc_date_col = "Date"
+                        st.session_state.cc_date_col  = "Date"
                     try:
-                        st.session_state.cc_heatmap = fetch_cost_heatmap_data(st.session_state.conn, perf_start, perf_end, perf_warehouse)
+                        st.session_state.cc_heatmap = fetch_cost_heatmap_data(
+                            st.session_state.conn, perf_start, perf_end, perf_warehouse)
                     except Exception as e:
-                        errors.append(f"Cost Heatmap: {str(e)}")
+                        errors.append(f"Cost Heatmap: {e}")
                         st.session_state.cc_heatmap = pd.DataFrame()
                     if errors:
                         for err in errors: st.error(f"❌ {err}")
                     else:
                         st.success("✅ Data loaded!")
 
-            # KPI summary cards
+            # KPI summary row
             if 'cc_credits' in st.session_state and not st.session_state.cc_credits.empty:
-                total_creds = pd.to_numeric(st.session_state.cc_credits.get("Credits Used", pd.Series(dtype=float)), errors='coerce').sum()
+                total_credits = pd.to_numeric(
+                    st.session_state.cc_credits.get("Credits Used", pd.Series()), errors='coerce').sum()
+                wh_count = st.session_state.cc_credits["Warehouse"].nunique() if "Warehouse" in st.session_state.cc_credits.columns else "—"
                 kc1, kc2, kc3 = st.columns(3)
-                kc1.metric("Total Credits Used", f"{total_creds:,.2f}")
-                kc2.metric("Est. Cost (@ $3/credit)", f"${total_creds * 3:,.2f}")
-                kc3.metric("Warehouses", st.session_state.cc_credits["Warehouse"].nunique() if "Warehouse" in st.session_state.cc_credits.columns else "N/A")
+                kc1.metric("💳 Total Credits Used", f"{total_credits:,.2f}")
+                kc2.metric("💵 Est. Cost @ $3/credit", f"${total_credits * 3:,.2f}")
+                kc3.metric("🏭 Warehouses", wh_count)
 
-            cc_sub1, cc_sub2, cc_sub3 = st.tabs(["📈 Credit Usage Over Time", "🏭 Warehouse Breakdown", "🌡️ Cost Heatmap"])
+            cc_sub1, cc_sub2, cc_sub3 = st.tabs(["📈 Credits Over Time", "🏭 By Warehouse", "🌡️ Cost Heatmap"])
 
             with cc_sub1:
                 if 'cc_over_time' in st.session_state and not st.session_state.cc_over_time.empty:
+                    date_col = st.session_state.get("cc_date_col", "Date")
                     st.dataframe(st.session_state.cc_over_time, use_container_width=True)
                     st.download_button("📥 Download", st.session_state.cc_over_time.to_csv(index=False),
                                        f"credit_usage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_cc_time")
-                    if MATPLOTLIB_AVAILABLE:
-                        df_p = st.session_state.cc_over_time.copy()
-                        date_col = st.session_state.get("cc_date_col", "Date")
-                        if date_col in df_p.columns and "Credits Used" in df_p.columns:
-                            fig, ax = plt.subplots(figsize=(10, 4))
-                            vals = pd.to_numeric(df_p["Credits Used"], errors='coerce').fillna(0)
-                            x = range(len(df_p))
-                            ax.fill_between(x, vals, color='lightgreen', alpha=0.7)
-                            ax.plot(x, vals, color='darkgreen', marker='o', linewidth=2)
-                            ax.set_xticks(list(x))
-                            ax.set_xticklabels(df_p[date_col].astype(str), rotation=45, ha='right')
-                            ax.set_ylabel("Credits Used")
-                            ax.set_title(f"Credit Usage ({date_col}-level)")
-                            ax.grid(True, alpha=0.3); plt.tight_layout()
-                            st.pyplot(fig); plt.close()
+                    _area_chart(st.session_state.cc_over_time, date_col, "Credits Used",
+                                f"Credit Usage Over Time ({date_col})")
                 else:
                     st.info("Click 'Load Cost Data' to see results.")
 
@@ -1605,175 +1722,148 @@ def show_main_app():
                     st.dataframe(st.session_state.cc_credits, use_container_width=True)
                     st.download_button("📥 Download", st.session_state.cc_credits.to_csv(index=False),
                                        f"warehouse_credits_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_cc_wh")
-                    if MATPLOTLIB_AVAILABLE:
-                        df_p = st.session_state.cc_credits.copy()
-                        compute_col = "Compute Credits"
-                        cloud_col = "Cloud Services Credits"
-                        if "Warehouse" in df_p.columns and compute_col in df_p.columns:
-                            fig, ax = plt.subplots(figsize=(10, 5))
-                            grp = df_p.groupby("Warehouse")[[compute_col, cloud_col]].sum().apply(pd.to_numeric, errors='coerce').fillna(0)
-                            grp.plot(kind='bar', stacked=True, ax=ax, cmap='coolwarm')
-                            ax.set_xlabel("Warehouse"); ax.set_ylabel("Credits")
-                            ax.set_title("Cost Breakdown by Warehouse")
-                            plt.xticks(rotation=45, ha='right'); plt.tight_layout()
-                            st.pyplot(fig); plt.close()
+                    vc = [c for c in ["Compute Credits", "Cloud Services Credits"] if c in st.session_state.cc_credits.columns]
+                    if vc:
+                        _stacked_bar(st.session_state.cc_credits, "Warehouse", vc, "Cost Breakdown by Warehouse")
                 else:
                     st.info("Click 'Load Cost Data' to see results.")
 
             with cc_sub3:
                 if 'cc_heatmap' in st.session_state and not st.session_state.cc_heatmap.empty:
-                    if MATPLOTLIB_AVAILABLE:
-                        df_h = st.session_state.cc_heatmap.copy()
-                        if all(c in df_h.columns for c in ["DayOfWeek", "HourOfDay", "Credits"]):
-                            df_h["Credits"] = pd.to_numeric(df_h["Credits"], errors='coerce').fillna(0)
-                            day_order = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                            pivot = df_h.pivot_table(index='HourOfDay', columns='DayOfWeek', values='Credits', fill_value=0)
-                            pivot = pivot.reindex(columns=day_order, fill_value=0)
-                            fig, ax = plt.subplots(figsize=(12, 7))
-                            sns.heatmap(pivot, cmap="YlGnBu", annot=True, fmt=".1f", linewidths=0.5, ax=ax)
-                            ax.set_title("Credits Used by Day & Hour")
-                            plt.tight_layout(); st.pyplot(fig); plt.close()
-                    st.download_button("📥 Download Heatmap Data", st.session_state.cc_heatmap.to_csv(index=False),
+                    df_heat = st.session_state.cc_heatmap.copy()
+                    st.download_button("📥 Download", df_heat.to_csv(index=False),
                                        f"cost_heatmap_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_cc_heat")
+                    if MATPLOTLIB_AVAILABLE and all(c in df_heat.columns for c in ["DayOfWeek", "HourOfDay", "Credits"]):
+                        df_heat["Credits"] = pd.to_numeric(df_heat["Credits"], errors='coerce').fillna(0)
+                        day_order = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                        pivot = df_heat.pivot_table(index='HourOfDay', columns='DayOfWeek', values='Credits', fill_value=0)
+                        pivot = pivot.reindex(columns=[d for d in day_order if d in pivot.columns], fill_value=0)
+                        fig, ax = plt.subplots(figsize=(12, 7))
+                        sns.heatmap(pivot, cmap="YlGnBu", annot=True, fmt=".1f", linewidths=0.5, ax=ax)
+                        ax.set_title("Credits Consumed by Day of Week & Hour of Day")
+                        plt.tight_layout()
+                        st.pyplot(fig); plt.close()
+                    elif all(c in df_heat.columns for c in ["DayOfWeek", "HourOfDay", "Credits"]):
+                        # Native fallback: pivot as a dataframe heatmap
+                        df_heat["Credits"] = pd.to_numeric(df_heat["Credits"], errors='coerce').fillna(0)
+                        pivot = df_heat.pivot_table(index='HourOfDay', columns='DayOfWeek', values='Credits', fill_value=0)
+                        st.markdown("**Credits by Day of Week & Hour (install seaborn for heatmap visualization)**")
+                        st.dataframe(pivot.style.background_gradient(cmap='Blues', axis=None), use_container_width=True)
                 else:
                     st.info("Click 'Load Cost Data' to see results.")
 
-        # ---- STORAGE ----
+        # =========================================================
+        # 🗄️ STORAGE
+        # =========================================================
         with perf_tab4:
             st.subheader("🗄️ Storage Analysis")
             if st.button("🔄 Load Storage Data", key="load_st", type="primary"):
                 with st.spinner("Loading..."):
                     errors = []
                     try:
-                        st.session_state.st_daily = fetch_daily_storage_usage(st.session_state.conn, perf_start, perf_end)
+                        st.session_state.st_daily = fetch_daily_storage_usage(
+                            st.session_state.conn, perf_start, perf_end)
                     except Exception as e:
-                        errors.append(f"Daily Storage: {str(e)}")
+                        errors.append(f"Daily Storage: {e}")
                         st.session_state.st_daily = pd.DataFrame()
                     try:
-                        st.session_state.st_total = fetch_total_storage_over_time(st.session_state.conn)
+                        st.session_state.st_tables = fetch_table_storage_metrics(
+                            st.session_state.conn,
+                            perf_db   if perf_db   != "All" else None,
+                            perf_schema if perf_schema != "All" else None)
                     except Exception as e:
-                        errors.append(f"Total Storage: {str(e)}")
-                        st.session_state.st_total = pd.DataFrame()
-                    try:
-                        db_for_storage = perf_db if perf_db != "All" else None
-                        schema_for_storage = perf_schema if perf_schema != "All" else None
-                        st.session_state.st_tables = fetch_table_storage_metrics(st.session_state.conn, db_for_storage, schema_for_storage)
-                    except Exception as e:
-                        errors.append(f"Table Storage: {str(e)}")
+                        errors.append(f"Table Storage: {e}")
                         st.session_state.st_tables = pd.DataFrame()
                     if errors:
                         for err in errors: st.error(f"❌ {err}")
                     else:
                         st.success("✅ Data loaded!")
 
-            st_sub1, st_sub2, st_sub3 = st.tabs(["📉 Daily DB Storage", "📦 Total Storage Over Time", "📋 Table Details"])
+            st_col1, st_col2 = st.columns(2)
 
-            with st_sub1:
+            with st_col1:
+                st.markdown("#### 📅 Daily Storage Usage (GB)")
                 if 'st_daily' in st.session_state and not st.session_state.st_daily.empty:
-                    # KPIs
-                    avg_gb = pd.to_numeric(st.session_state.st_daily.get("Avg DB Storage (GB)", pd.Series(dtype=float)), errors='coerce').mean()
-                    max_gb = pd.to_numeric(st.session_state.st_daily.get("Avg DB Storage (GB)", pd.Series(dtype=float)), errors='coerce').max()
-                    sc1, sc2 = st.columns(2)
-                    sc1.metric("Avg Daily DB Storage", f"{avg_gb:.2f} GB")
-                    sc2.metric("Peak Daily DB Storage", f"{max_gb:.2f} GB")
                     st.dataframe(st.session_state.st_daily, use_container_width=True)
                     st.download_button("📥 Download", st.session_state.st_daily.to_csv(index=False),
                                        f"daily_storage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_st_daily")
-                    if MATPLOTLIB_AVAILABLE:
-                        df_p = st.session_state.st_daily.copy()
-                        if "Date" in df_p.columns and "Avg DB Storage (GB)" in df_p.columns:
-                            fig, ax = plt.subplots(figsize=(10, 4))
-                            df_p["Date"] = pd.to_datetime(df_p["Date"])
-                            df_p["Avg DB Storage (GB)"] = pd.to_numeric(df_p["Avg DB Storage (GB)"], errors='coerce').fillna(0)
-                            ax.plot(df_p["Date"], df_p["Avg DB Storage (GB)"], marker='o', color='teal', linewidth=2)
-                            ax.fill_between(df_p["Date"], df_p["Avg DB Storage (GB)"], alpha=0.2, color='teal')
-                            ax.set_xlabel("Date"); ax.set_ylabel("GB")
-                            ax.set_title("Average Daily DB Storage (GB)")
-                            ax.grid(True, alpha=0.3); plt.xticks(rotation=45); plt.tight_layout()
-                            st.pyplot(fig); plt.close()
+                    _line_chart(st.session_state.st_daily, "Date", "Avg DB Storage (GB)",
+                                "Average Daily Database Storage (GB)", color="teal")
+                    # Also show failsafe trend if available
+                    if "Avg Failsafe (GB)" in st.session_state.st_daily.columns:
+                        _line_chart(st.session_state.st_daily, "Date", "Avg Failsafe (GB)",
+                                    "Average Failsafe Storage (GB)", color="darkorange")
                 else:
                     st.info("Click 'Load Storage Data' to see results.")
 
-            with st_sub2:
-                if 'st_total' in st.session_state and not st.session_state.st_total.empty:
-                    st.dataframe(st.session_state.st_total, use_container_width=True)
-                    st.download_button("📥 Download", st.session_state.st_total.to_csv(index=False),
-                                       f"total_storage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_st_total")
-                    if MATPLOTLIB_AVAILABLE:
-                        df_p = st.session_state.st_total.copy()
-                        if "Date" in df_p.columns and "Total Storage (GB)" in df_p.columns:
-                            fig, ax = plt.subplots(figsize=(10, 4))
-                            df_p["Date"] = pd.to_datetime(df_p["Date"])
-                            df_p["Total Storage (GB)"] = pd.to_numeric(df_p["Total Storage (GB)"], errors='coerce').fillna(0)
-                            df_p = df_p.sort_values("Date")
-                            ax.plot(df_p["Date"], df_p["Total Storage (GB)"], marker='o', color='royalblue', linewidth=2)
-                            ax.set_xlabel("Date"); ax.set_ylabel("GB")
-                            ax.set_title("Total Account Storage Over Time (GB)")
-                            ax.grid(True, alpha=0.3); plt.xticks(rotation=45); plt.tight_layout()
-                            st.pyplot(fig); plt.close()
-                else:
-                    st.info("Click 'Load Storage Data' to see results.")
-
-            with st_sub3:
+            with st_col2:
+                st.markdown("#### 🗃️ Table Storage Details (MB)")
                 if 'st_tables' in st.session_state and not st.session_state.st_tables.empty:
                     st.dataframe(st.session_state.st_tables, use_container_width=True)
                     st.download_button("📥 Download", st.session_state.st_tables.to_csv(index=False),
                                        f"table_storage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_st_tables")
+                    _hbar_chart(st.session_state.st_tables, "Table", "Active Size (MB)",
+                                "Top 10 Tables by Active Storage (MB)", color="mediumslateblue")
                 else:
-                    st.info("Select a specific Database and Schema (not 'All') in the Global Filters, then click 'Load Storage Data'.")
+                    st.info("Select a specific Database and Schema, then click 'Load Storage Data'.")
 
-        # ---- WAREHOUSE ACTIVITY ----
+        # =========================================================
+        # 🏭 WAREHOUSE ACTIVITY
+        # =========================================================
         with perf_tab5:
             st.subheader("🏭 Warehouse Activity")
             if st.button("🔄 Load Warehouse Activity Data", key="load_wa", type="primary"):
                 with st.spinner("Loading..."):
+                    errors = []
                     try:
                         st.session_state.wa_util = fetch_warehouse_utilization(
-                            st.session_state.conn, perf_start, perf_end, perf_warehouse
-                        )
-                        st.success("✅ Data loaded!")
+                            st.session_state.conn, perf_start, perf_end, perf_warehouse)
                     except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
+                        errors.append(f"Warehouse Utilization: {e}")
                         st.session_state.wa_util = pd.DataFrame()
+                    if errors:
+                        for err in errors: st.error(f"❌ {err}")
+                    else:
+                        st.success("✅ Data loaded!")
 
             if 'wa_util' in st.session_state and not st.session_state.wa_util.empty:
-                # Summary metrics
-                wa_m1, wa_m2, wa_m3 = st.columns(3)
-                avg_run = pd.to_numeric(st.session_state.wa_util.get("Avg Running", pd.Series(dtype=float)), errors='coerce').mean()
-                avg_queued = pd.to_numeric(st.session_state.wa_util.get("Avg Queued", pd.Series(dtype=float)), errors='coerce').mean()
-                avg_blocked = pd.to_numeric(st.session_state.wa_util.get("Avg Blocked", pd.Series(dtype=float)), errors='coerce').mean()
-                wa_m1.metric("Avg Running Queries", f"{avg_run:.2f}")
-                wa_m2.metric("Avg Queued Load", f"{avg_queued:.2f}")
-                wa_m3.metric("Avg Blocked Queries", f"{avg_blocked:.2f}")
-
-                st.dataframe(st.session_state.wa_util, use_container_width=True)
-                st.download_button("📥 Download", st.session_state.wa_util.to_csv(index=False),
+                df_wa = st.session_state.wa_util
+                st.dataframe(df_wa, use_container_width=True)
+                st.download_button("📥 Download", df_wa.to_csv(index=False),
                                    f"warehouse_activity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_wa")
 
-                if MATPLOTLIB_AVAILABLE:
-                    wa_col1, wa_col2 = st.columns(2)
-                    df_p = st.session_state.wa_util.copy()
-                    with wa_col1:
-                        if "Date" in df_p.columns and "Avg Running" in df_p.columns:
-                            fig, ax = plt.subplots(figsize=(8, 4))
-                            df_p["Date"] = pd.to_datetime(df_p["Date"])
-                            daily = df_p.groupby("Date")["Avg Running"].mean().reset_index()
-                            daily["Avg Running"] = pd.to_numeric(daily["Avg Running"], errors='coerce').fillna(0)
-                            ax.plot(daily["Date"], daily["Avg Running"], marker='o', color='royalblue', linewidth=2)
-                            ax.set_xlabel("Date"); ax.set_ylabel("Avg Running")
-                            ax.set_title("Daily Avg Running Queries")
-                            ax.grid(True, alpha=0.3); plt.xticks(rotation=45); plt.tight_layout()
-                            st.pyplot(fig); plt.close()
-                    with wa_col2:
-                        if "Warehouse" in df_p.columns and "Avg Running" in df_p.columns:
-                            fig, ax = plt.subplots(figsize=(8, 4))
-                            cols_to_plot = [c for c in ["Avg Running", "Avg Queued", "Avg Blocked"] if c in df_p.columns]
-                            grp = df_p.groupby("Warehouse")[cols_to_plot].mean().apply(pd.to_numeric, errors='coerce').fillna(0)
-                            grp.plot(kind='bar', ax=ax, cmap='Set2')
-                            ax.set_xlabel("Warehouse"); ax.set_ylabel("Average")
-                            ax.set_title("Avg Load by Warehouse")
-                            plt.xticks(rotation=45, ha='right'); plt.tight_layout()
-                            st.pyplot(fig); plt.close()
+                wa_col1, wa_col2 = st.columns(2)
+                with wa_col1:
+                    # Daily avg running trend
+                    if "Date" in df_wa.columns and "Avg Running" in df_wa.columns:
+                        df_trend = df_wa.copy()
+                        df_trend["Avg Running"] = pd.to_numeric(df_trend["Avg Running"], errors='coerce').fillna(0)
+                        try:
+                            df_trend["Date"] = pd.to_datetime(df_trend["Date"])
+                        except Exception:
+                            pass
+                        daily = df_trend.groupby("Date")["Avg Running"].mean().reset_index()
+                        _line_chart(daily, "Date", "Avg Running",
+                                    "Daily Avg Running Queries", color="royalblue")
+
+                with wa_col2:
+                    # Avg load by warehouse (grouped bar)
+                    if "Warehouse" in df_wa.columns:
+                        cols = [c for c in ["Avg Running", "Avg Queued", "Avg Blocked"] if c in df_wa.columns]
+                        if cols:
+                            for c in cols:
+                                df_wa[c] = pd.to_numeric(df_wa[c], errors='coerce').fillna(0)
+                            grp = df_wa.groupby("Warehouse")[cols].mean()
+                            if MATPLOTLIB_AVAILABLE:
+                                fig, ax = plt.subplots(figsize=(8, 4))
+                                grp.plot(kind='bar', ax=ax, cmap='Set2')
+                                ax.set_xlabel("Warehouse"); ax.set_ylabel("Average Count")
+                                ax.set_title("Avg Running / Queued / Blocked by Warehouse")
+                                plt.xticks(rotation=45, ha='right'); plt.tight_layout()
+                                st.pyplot(fig); plt.close()
+                            else:
+                                st.markdown("**Avg Load by Warehouse**")
+                                st.bar_chart(grp)
             else:
                 st.info("Click 'Load Warehouse Activity Data' to see results.")
 

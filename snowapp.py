@@ -118,13 +118,13 @@ st.markdown("""
         right: 50%;
         margin-left: -50vw;
         margin-right: -50vw;
-        background: linear-gradient(135deg, #6B2E8F 0%, #8E44AD 50%, #9B59B6 100%);
+        background: linear-gradient(135deg, #00796B 0%, #009688 50%, #4DB6AC 100%);
         padding: 15px 60px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         box-shadow: 0 4px 20px rgba(106, 13, 173, 0.25);
-        border-bottom: 3px solid #C39BD3;
+        border-bottom: 3px solid #B2DFDB;
         z-index: 10;
         margin-bottom: 25px;
         flex-shrink: 0;
@@ -166,9 +166,9 @@ st.markdown("""
         width: 100%;
         text-align: center;
         padding: 12px 20px;
-        background: linear-gradient(135deg, #6B2E8F 0%, #8E44AD 100%);
+        background: linear-gradient(135deg, #00796B 0%, #009688 100%);
         color: #F0E0FF;
-        border-top: 2px solid #C39BD3;
+        border-top: 2px solid #B2DFDB;
         font-size: 13px;
         font-weight: 300;
         z-index: 9999;
@@ -232,7 +232,7 @@ st.markdown("""
         width: 100%;
         border-radius: 8px;
         font-weight: 600;
-        background: linear-gradient(135deg, #5D3FD3, #7B68EE) !important;  /* Purple-blue gradient */
+        background: linear-gradient(135deg, #D81B60, #F06292) !important;  /* Purple-blue gradient */
         color: white !important;
         border: none !important;
         transition: all 0.3s ease;
@@ -338,7 +338,7 @@ st.markdown("""
         background: white;
         border-radius: 12px;
         padding: 20px;
-        border-left: 5px solid #8E44AD;
+        border-left: 5px solid #009688;
         box-shadow: 0 4px 12px rgba(106, 13, 173, 0.1);
         margin-bottom: 12px;
         transition: all 0.3s;
@@ -355,7 +355,7 @@ st.markdown("""
         background: white;
         border-radius: 12px;
         padding: 20px;
-        border-left: 5px solid #8E44AD;
+        border-left: 5px solid #009688;
         box-shadow: 0 4px 12px rgba(106, 13, 173, 0.1);
         text-align: center;
         transition: all 0.3s;

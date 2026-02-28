@@ -162,7 +162,6 @@ st.markdown("""
         padding: 12px;
         
         color: #b0c4de;
-        border-top: 2px solid;
         font-size: 13px;
         flex-shrink: 0;
         margin-top: auto;

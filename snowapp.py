@@ -159,9 +159,6 @@ st.markdown("""
         margin-left: -50vw;
         margin-right: -50vw;
         text-align: center;
-        padding: 5px;
-        
-        color: #b0c4de;
         font-size: 13px;
         flex-shrink: 0;
     }

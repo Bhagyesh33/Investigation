@@ -166,6 +166,7 @@ st.markdown("""
         width: 100%;
         text-align: center;
         padding: 8px 10px;
+        background: white !important;
         border-top: 2px solid #2c4e8a;
         font-size: 13px;
         font-weight: 300;

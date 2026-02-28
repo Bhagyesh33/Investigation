@@ -88,7 +88,7 @@ st.markdown("""
 <style>
     /* Hide default streamlit elements */
     #MainMenu {visibility: hidden;}
-    
+    footer {visibility: hidden;}
     
     /* Make the app take full height */
     .stApp {
@@ -160,7 +160,7 @@ st.markdown("""
         margin-right: -50vw;
         text-align: center;
         padding: 12px;
-        background: linear-gradient(90deg, #0a0f1e, #13203d, #1f3d6d);
+        
         color: #b0c4de;
         border-top: 2px solid #2c4e8a;
         font-size: 13px;

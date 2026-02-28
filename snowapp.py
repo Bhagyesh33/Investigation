@@ -2026,8 +2026,54 @@ else:
     show_login_page()
 
 st.markdown("---")
+# ========== FIXED FOOTER ==========
 st.markdown("""
-<div style='text-align: center; color: #666; padding: 10px;'>
-    <p>DeploySure Suite v2.0 | Powered by Streamlit & Snowflake</p>
+<style>
+    /* Fixed footer styling */
+    .fixed-footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(90deg, #0a0f1e, #13203d, #1f3d6d);
+        color: #b0c4de;
+        text-align: center;
+        padding: 12px;
+        font-size: 14px;
+        border-top: 2px solid #2c4e8a;
+        z-index: 9999;
+        width: 100vw;
+        margin-left: -50vw;
+        margin-right: -50vw;
+        position: relative;
+        left: 50%;
+        right: 50%;
+        box-shadow: 0 -4px 10px rgba(0,0,0,0.2);
+    }
+    
+    /* Add padding to the bottom of the main content */
+    .main .block-container {
+        padding-bottom: 70px !important;
+    }
+    
+    /* Style for footer text */
+    .fixed-footer p {
+        margin: 0;
+        font-size: 14px;
+        color: #b0c4de;
+    }
+    
+    .fixed-footer a {
+        color: #66b0ff;
+        text-decoration: none;
+    }
+    
+    .fixed-footer a:hover {
+        text-decoration: underline;
+    }
+</style>
+
+<div class="fixed-footer">
+    <p>DeploySure Suite v2.0 | CloudLabs Inc | © 2024</p>
 </div>
 """, unsafe_allow_html=True)

@@ -86,40 +86,110 @@ header {visibility: hidden !important;}
 
 st.markdown("""
 <style>
-            
-    /* Fixed footer styling - always at bottom of viewport */
-    .fixed-footer {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
+    /* Hide default streamlit elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Make the app take full height */
+    .stApp {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+    }
+    
+    /* Main content should take remaining space */
+    .main > div {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    /* Push content to take available space */
+    .block-container {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        padding-top: 0 !important;
+    }
+    
+    /* Make only the header section full width */
+    .header-full {
         width: 100vw;
-        margin-left: -50vw;
-        margin-right: -50vw;
         position: relative;
         left: 50%;
         right: 50%;
+        margin-left: -50vw;
+        margin-right: -50vw;
+        background: linear-gradient(90deg, #0a0f1e, #13203d, #1f3d6d);
+        padding: 10px 60px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        border-bottom: 2px solid #2c4e8a;
+        z-index: 10;
+        margin-bottom: 20px;
+        flex-shrink: 0;
+    }
+
+    .header-logo img {
+        height: 40px;
+    }
+
+    .header-text h1 {
+        font-size: 34px;
+        font-weight: 800;
+        color: #ffffff;
+        margin: 0;
+        letter-spacing: 1px;
+    }
+
+    .header-text p {
+        font-size: 16px;
+        color: #b0c4de;
+        margin-top: 5px;
+    }
+    
+    /* Footer styling - always at bottom */
+    .fixed-footer {
+        width: 100vw;
+        position: relative;
+        left: 50%;
+        right: 50%;
+        margin-left: -50vw;
+        margin-right: -50vw;
         text-align: center;
         padding: 12px;
         background: linear-gradient(90deg, #0a0f1e, #13203d, #1f3d6d);
         color: #b0c4de;
         border-top: 2px solid #2c4e8a;
         font-size: 13px;
-        z-index: 9999;
         box-shadow: 0 -4px 10px rgba(0,0,0,0.2);
+        flex-shrink: 0;
+        margin-top: auto;
     }
     
-    /* Add padding to the bottom of the main content to prevent footer overlap */
-    .main .block-container {
-        padding-bottom: 70px !important;
+    /* Content wrapper to push footer down */
+    .content-wrapper {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
     }
     
-    /* Ensure the last element doesn't hide behind footer */
-    .stTabs, .stExpander, .stDataFrame {
-        margin-bottom: 20px;
+    /* Score box styling */
+    .score-box {
+        text-align: center;
+        padding: 20px;
+        border-radius: 10px;
+        font-size: 24px;
+        font-weight: bold;
+        margin: 20px 0;
     }
-            
-        /* Button styling - Blue theme */
+    .passed-score { background-color: #d4edda; border: 2px solid #28a745; color: #155724; }
+    .warning-score { background-color: #fff3cd; border: 2px solid #ffc107; color: #856404; }
+    .failed-score { background-color: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
+    
+    /* Button styling - Blue theme */
     .stButton button {
         width: 100%;
         border-radius: 8px;
@@ -142,7 +212,7 @@ st.markdown("""
         transform: translateY(0);
     }
     
-    /* Primary button styling (if you want them slightly different) */
+    /* Primary button styling */
     .stButton button[kind="primary"] {
         background-color: #004080 !important;
     }
@@ -161,65 +231,21 @@ st.markdown("""
     .stForm button:hover {
         background-color: #0052a3 !important;
     }
-    /* Hide default streamlit elements */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
     
-    /* Make only the header section full width */
-    .header-full {
-        width: 100vw; /* full viewport width */
-        position: relative;
-        left: 50%;
-        right: 50%;
-        margin-left: -50vw;
-        margin-right: -50vw;
-        background: linear-gradient(90deg, #0a0f1e, #13203d, #1f3d6d);
-        padding: 10px 60px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-        border-bottom: 2px solid #2c4e8a;
-        z-index: 10;
-        margin-bottom: 20px;
-    }
-
-    .header-logo img {
-        height: 40px;
-    }
-
-    .header-text h1 {
-        font-size: 34px;
-        font-weight: 800;
-        color: #ffffff;
-        margin: 0;
-        letter-spacing: 1px;
-    }
-
-    .header-text p {
-        font-size: 16px;
-        color: #b0c4de;
-        margin-top: 5px;
-    }
-    
-    /* Keep your existing styles below */
-    .score-box {
-        text-align: center;
-        padding: 20px;
-        border-radius: 10px;
-        font-size: 24px;
-        font-weight: bold;
-        margin: 20px 0;
-    }
-    .passed-score { background-color: #d4edda; border: 2px solid #28a745; color: #155724; }
-    .warning-score { background-color: #fff3cd; border: 2px solid #ffc107; color: #856404; }
-    .failed-score { background-color: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
-    .stButton button { width: 100%; border-radius: 8px; font-weight: 600; }
+    /* KPI card styling */
     .kpi-card {
         background: white; border-radius: 8px; padding: 16px;
-        border-left: 4px solid #667eea;
+        border-left: 4px solid #0066cc;
         box-shadow: 0 2px 4px rgba(0,0,0,0.08); margin-bottom: 8px;
     }
+    
+    /* Remove top-right sidebar toggle */
+    .css-1rs6os.edgvbvh3 { 
+        display: none !important;
+    }
+    
+    /* Hide default Streamlit header */
+    header {visibility: hidden !important;}
 </style>
 """, unsafe_allow_html=True)
 

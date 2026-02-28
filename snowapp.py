@@ -86,33 +86,31 @@ header {visibility: hidden !important;}
 
 st.markdown("""
 <style>
-    /* Hide default streamlit elements */
+    /* ===== RESET & BASE STYLES ===== */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* Make the app take full height */
+    /* ===== APP LAYOUT ===== */
     .stApp {
         display: flex;
         flex-direction: column;
         min-height: 100vh;
+        background-color: #f8f9fc;  /* Very light purple-tinted white */
     }
     
-    /* Main content should take remaining space */
     .main > div {
         flex: 1 1 auto;
         display: flex;
         flex-direction: column;
     }
     
-    /* Push content to take available space */
     .block-container {
         flex: 1 1 auto;
-        display: flex;
-        flex-direction: column;
         padding-top: 0 !important;
+        background-color: #f8f9fc;
     }
     
-    /* Make only the header section full width */
+    /* ===== HEADER - PURPLE THEME ===== */
     .header-full {
         width: 100vw;
         position: relative;
@@ -120,125 +118,353 @@ st.markdown("""
         right: 50%;
         margin-left: -50vw;
         margin-right: -50vw;
-        background: linear-gradient(90deg, #6b2e8f, #8e44ad, #9b59b6);
-        padding: 10px 60px;
+        background: linear-gradient(135deg, #6B2E8F 0%, #8E44AD 50%, #9B59B6 100%);
+        padding: 15px 60px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-        border-bottom: 2px solid #c39bd3;
+        box-shadow: 0 4px 20px rgba(106, 13, 173, 0.25);
+        border-bottom: 3px solid #C39BD3;
         z-index: 10;
-        margin-bottom: 20px;
+        margin-bottom: 25px;
         flex-shrink: 0;
     }
 
     .header-logo img {
-        height: 40px;
+        height: 45px;
+        width: auto;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    }
+
+    .header-text {
+        text-align: center;
     }
 
     .header-text h1 {
-        font-size: 34px;
-        font-weight: 800;
-        color: #ffffff;
+        font-size: 32px;
+        font-weight: 700;
+        color: #FFFFFF;
         margin: 0;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
     }
 
     .header-text p {
-        font-size: 16px;
-        color: #b0c4de;
-        margin-top: 5px;
+        font-size: 15px;
+        color: #F0E0FF;  /* Light lavender */
+        margin-top: 4px;
+        font-weight: 300;
+        letter-spacing: 0.3px;
     }
-    
-    /* Footer styling - always at bottom */
+
+    /* ===== FOOTER - MATCHING PURPLE ===== */
     .fixed-footer {
-        width: 100vw;
-        position: relative;
-        left: 50%;
-        right: 50%;
-        margin-left: -50vw;
-        margin-right: -50vw;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
         text-align: center;
+        padding: 12px 20px;
+        background: linear-gradient(135deg, #6B2E8F 0%, #8E44AD 100%);
+        color: #F0E0FF;
+        border-top: 2px solid #C39BD3;
         font-size: 13px;
-        flex-shrink: 0;
+        font-weight: 300;
+        z-index: 9999;
+        box-shadow: 0 -4px 15px rgba(106, 13, 173, 0.2);
+        letter-spacing: 0.3px;
     }
     
-    /* Content wrapper to push footer down */
-    .content-wrapper {
-        flex: 1 1 auto;
-        display: flex;
-        flex-direction: column;
+    .fixed-footer p {
+        margin: 0;
+        opacity: 0.9;
     }
-    
-    /* Score box styling */
-    .score-box {
-        text-align: center;
-        padding: 20px;
-        border-radius: 10px;
-        font-size: 24px;
-        font-weight: bold;
-        margin: 20px 0;
+
+    /* ===== MAIN CONTENT AREA ===== */
+    .main-content {
+        background-color: #f8f9fc;
+        padding: 0 20px 70px 20px;  /* Bottom padding for footer */
     }
-    .passed-score { background-color: #d4edda; border: 2px solid #28a745; color: #155724; }
-    .warning-score { background-color: #fff3cd; border: 2px solid #ffc107; color: #856404; }
-    .failed-score { background-color: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
-    
-    /* Button styling - Blue theme */
+
+    /* ===== CARD STYLES ===== */
+    div[data-testid="stExpander"], 
+    div.stTabs, 
+    div.stDataFrame {
+        background-color: white;
+        border-radius: 12px;
+        padding: 5px;
+        box-shadow: 0 2px 12px rgba(106, 13, 173, 0.08);
+        border: 1px solid rgba(106, 13, 173, 0.1);
+        margin-bottom: 15px;
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: white;
+        padding: 15px 15px 5px 15px;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        padding: 8px 16px;
+        background-color: #f0e6f5;
+        color: #4A2C5F;
+        border: none;
+        font-weight: 500;
+        transition: all 0.3s;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #d9c2e6;
+        color: #3A1F4F;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #6B2E8F, #8E44AD) !important;
+        color: white !important;
+        font-weight: 600;
+    }
+
+    /* ===== BUTTON STYLES - COMPLEMENTARY PURPLE/BLUE ===== */
     .stButton button {
         width: 100%;
         border-radius: 8px;
         font-weight: 600;
-        background-color: #4da6ff !important;
+        background: linear-gradient(135deg, #5D3FD3, #7B68EE) !important;  /* Purple-blue gradient */
         color: white !important;
         border: none !important;
         transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(93, 63, 211, 0.25);
     }
     
     .stButton button:hover {
-        background-color: #0052a3 !important;
+        background: linear-gradient(135deg, #4A2DB3, #5D3FD3) !important;
         color: white !important;
         transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(0,102,204,0.3);
+        box-shadow: 0 6px 16px rgba(93, 63, 211, 0.35);
     }
     
     .stButton button:active {
-        background-color: #004080 !important;
         transform: translateY(0);
+        box-shadow: 0 2px 8px rgba(93, 63, 211, 0.2);
     }
     
-    /* Primary button styling */
+    /* Primary buttons */
     .stButton button[kind="primary"] {
-        background-color: #004080 !important;
+        background: linear-gradient(135deg, #8E44AD, #9B59B6) !important;
     }
     
     .stButton button[kind="primary"]:hover {
-        background-color: #003366 !important;
+        background: linear-gradient(135deg, #7D3C98, #8E44AD) !important;
     }
     
-    /* Form submit button */
+    /* Form submit buttons */
     .stForm button {
-        background-color: #0066cc !important;
+        background: linear-gradient(135deg, #5D3FD3, #7B68EE) !important;
         color: white !important;
         border: none !important;
+        border-radius: 8px;
+        font-weight: 600;
+        padding: 10px 20px;
+        box-shadow: 0 4px 12px rgba(93, 63, 211, 0.25);
     }
     
     .stForm button:hover {
-        background-color: #0052a3 !important;
+        background: linear-gradient(135deg, #4A2DB3, #5D3FD3) !important;
+        transform: translateY(-2px);
     }
     
-    /* KPI card styling */
+    /* Download buttons */
+    .stDownloadButton button {
+        background: linear-gradient(135deg, #5D3FD3, #7B68EE) !important;
+        color: white !important;
+    }
+    
+    .stDownloadButton button:hover {
+        background: linear-gradient(135deg, #4A2DB3, #5D3FD3) !important;
+    }
+
+    /* ===== FORM ELEMENTS ===== */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > div,
+    .stMultiselect > div > div > div {
+        border-radius: 8px;
+        border: 1px solid #e0d0e8;
+        background-color: white;
+        transition: all 0.3s;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stSelectbox > div > div > div:focus {
+        border-color: #8E44AD !important;
+        box-shadow: 0 0 0 2px rgba(142, 68, 173, 0.2) !important;
+    }
+    
+    /* ===== SCORE BOXES ===== */
+    .score-box {
+        text-align: center;
+        padding: 25px;
+        border-radius: 16px;
+        font-size: 28px;
+        font-weight: bold;
+        margin: 20px 0;
+        background: white;
+        box-shadow: 0 4px 16px rgba(106, 13, 173, 0.15);
+        border: 1px solid rgba(142, 68, 173, 0.2);
+    }
+    
+    .passed-score { 
+        background: linear-gradient(135deg, #d4edda, #c3e6cb) !important; 
+        border: 2px solid #8E44AD !important; 
+        color: #155724 !important; 
+    }
+    
+    .warning-score { 
+        background: linear-gradient(135deg, #fff3cd, #ffeaa5) !important; 
+        border: 2px solid #8E44AD !important; 
+        color: #856404 !important; 
+    }
+    
+    .failed-score { 
+        background: linear-gradient(135deg, #f8d7da, #f5c6cb) !important; 
+        border: 2px solid #8E44AD !important; 
+        color: #721c24 !important; 
+    }
+
+    /* ===== KPI CARDS ===== */
     .kpi-card {
-        background: white; border-radius: 8px; padding: 16px;
-        border-left: 4px solid #0066cc;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.08); margin-bottom: 8px;
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        border-left: 5px solid #8E44AD;
+        box-shadow: 0 4px 12px rgba(106, 13, 173, 0.1);
+        margin-bottom: 12px;
+        transition: all 0.3s;
+        border: 1px solid rgba(142, 68, 173, 0.1);
     }
     
-    /* Remove top-right sidebar toggle */
+    .kpi-card:hover {
+        transform: translateX(5px);
+        box-shadow: 0 6px 16px rgba(106, 13, 173, 0.15);
+    }
+
+    /* ===== METRIC CARDS ===== */
+    .metric-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        border-left: 5px solid #8E44AD;
+        box-shadow: 0 4px 12px rgba(106, 13, 173, 0.1);
+        text-align: center;
+        transition: all 0.3s;
+        border: 1px solid rgba(142, 68, 173, 0.1);
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 16px rgba(106, 13, 173, 0.2);
+    }
+    
+    .metric-card h3 {
+        margin: 0;
+        font-size: 14px;
+        color: #6c757d;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .metric-card .value {
+        margin: 8px 0 0 0;
+        font-size: 28px;
+        font-weight: bold;
+        color: #2c3e50;
+    }
+
+    /* ===== DATA FRAMES ===== */
+    .stDataFrame {
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid rgba(142, 68, 173, 0.2);
+    }
+    
+    .stDataFrame [data-testid="StyledDataFrame"] {
+        background: white;
+    }
+    
+    .stDataFrame th {
+        background: linear-gradient(135deg, #f0e6f5, #e6d9f0);
+        color: #4A2C5F;
+        font-weight: 600;
+    }
+
+    /* ===== EXPANDER ===== */
+    .streamlit-expanderHeader {
+        background: linear-gradient(135deg, #f8f9fc, #f0e6f5) !important;
+        border-radius: 10px;
+        font-weight: 600;
+        color: #4A2C5F;
+        border: 1px solid rgba(142, 68, 173, 0.2);
+    }
+    
+    .streamlit-expanderContent {
+        background: white;
+        border-radius: 0 0 10px 10px;
+        border: 1px solid rgba(142, 68, 173, 0.2);
+        border-top: none;
+        padding: 15px;
+    }
+
+    /* ===== SIDEBAR ===== */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(135deg, #f8f9fc, #f0e6f5);
+        border-right: 2px solid #8E44AD;
+    }
+    
+    [data-testid="stSidebar"] .stButton button {
+        background: linear-gradient(135deg, #6B2E8F, #8E44AD) !important;
+    }
+
+    /* ===== SUCCESS/WARNING/ERROR MESSAGES ===== */
+    .stAlert {
+        border-radius: 10px;
+        border-left: 5px solid #8E44AD;
+        background: white;
+        box-shadow: 0 2px 8px rgba(106, 13, 173, 0.1);
+    }
+    
+    .stSuccess {
+        background: linear-gradient(135deg, #d4edda, #c3e6cb) !important;
+        color: #155724 !important;
+        border-left: 5px solid #8E44AD !important;
+    }
+    
+    .stWarning {
+        background: linear-gradient(135deg, #fff3cd, #ffeaa5) !important;
+        color: #856404 !important;
+        border-left: 5px solid #8E44AD !important;
+    }
+    
+    .stError {
+        background: linear-gradient(135deg, #f8d7da, #f5c6cb) !important;
+        color: #721c24 !important;
+        border-left: 5px solid #8E44AD !important;
+    }
+    
+    .stInfo {
+        background: linear-gradient(135deg, #d1ecf1, #bee5eb) !important;
+        color: #0c5460 !important;
+        border-left: 5px solid #8E44AD !important;
+    }
+
+    /* ===== REMOVE TOP-RIGHT SIDEBAR TOGGLE ===== */
     .css-1rs6os.edgvbvh3 { 
         display: none !important;
     }
     
-    /* Hide default Streamlit header */
+    /* ===== HIDE DEFAULT STREAMLIT HEADER ===== */
     header {visibility: hidden !important;}
 </style>
 """, unsafe_allow_html=True)

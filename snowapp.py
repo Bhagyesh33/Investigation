@@ -88,7 +88,7 @@ st.markdown("""
 <style>
     /* Hide default streamlit elements */
     #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    
     
     /* Make the app take full height */
     .stApp {

@@ -87,45 +87,36 @@ header {visibility: hidden !important;}
 st.markdown("""
 <style>
             
-        /* Push footer to bottom */
-    .stApp {
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
-    }
-    
-    .main > div {
-        flex: 1;
-    }
-    
-    /* Footer styling - stays at bottom of content */
-    .app-footer {
+    /* Fixed footer styling - always at bottom of viewport */
+    .fixed-footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
         width: 100vw;
+        margin-left: -50vw;
+        margin-right: -50vw;
         position: relative;
         left: 50%;
         right: 50%;
-        margin-left: -50vw;
-        margin-right: -50vw;
         text-align: center;
-        padding: 15px;
+        padding: 12px;
         background: linear-gradient(90deg, #0a0f1e, #13203d, #1f3d6d);
         color: #b0c4de;
         border-top: 2px solid #2c4e8a;
         font-size: 13px;
-        margin-top: 30px;
+        z-index: 9999;
+        box-shadow: 0 -4px 10px rgba(0,0,0,0.2);
     }
     
-    /* Subtle style like "AI-generated, for reference only" */
-    .app-footer p {
-        margin: 0;
-        opacity: 0.8;
-        font-style: italic;
+    /* Add padding to the bottom of the main content to prevent footer overlap */
+    .main .block-container {
+        padding-bottom: 70px !important;
     }
     
-    .app-footer .note {
-        color: #66b0ff;
-        font-weight: 500;
-        margin-left: 5px;
+    /* Ensure the last element doesn't hide behind footer */
+    .stTabs, .stExpander, .stDataFrame {
+        margin-bottom: 20px;
     }
             
         /* Button styling - Blue theme */
@@ -2069,7 +2060,7 @@ else:
 st.markdown("---")
 # ========== FIXED FOOTER ==========
 st.markdown("""
-<div class="app-footer">
+<div class="fixed-footer">
     <p>DeploySure Suite v2.0 | CloudLabs Inc | © 2024</p>
 </div>
 """, unsafe_allow_html=True)

@@ -9,6 +9,27 @@ import traceback
 from decimal import Decimal
 import numpy as np
 import base64
+import os
+from PIL import Image
+import io
+
+def get_image_base64(image_path):
+    """Convert an image file to base64 string"""
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode('utf-8')
+    except Exception as e:
+        # Fallback to the SVG logo if file not found
+        return get_logo_base64()
+
+# Try to load your logo file, fallback to SVG if not found
+logo_path = "logo-clbs- (1).png"  # Make sure this path is correct
+if os.path.exists(logo_path):
+    logo_base64 = get_image_base64(logo_path)
+    logo_mime = "image/png"
+else:
+    logo_base64 = get_logo_base64()
+    logo_mime = "image/svg+xml"
 
 # Create a simple base64 encoded logo (you can replace this with your own logo)
 def get_logo_base64():
@@ -979,7 +1000,7 @@ def show_login_page():
         st.markdown(f"""
         <div class="header-full">
             <div class="header-logo">
-                <img src="logo-clbs- (1).png,{logo_base64}" alt="DeploySure Logo">
+                <img src="data:{logo_mime};base64,{logo_base64}" alt="DeploySure Logo">
             </div>
             <div class="header-text">
                 <h1>DeploySure Suite</h1>

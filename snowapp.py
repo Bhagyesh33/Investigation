@@ -47,6 +47,23 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+/* REMOVE top-right sidebar toggle ( » ) */
+.css-1rs6os.edgvbvh3 { 
+    display: none !important;
+}
+
+/* Remove the top padding Streamlit adds */
+.block-container {
+    padding-top: 0 !important;
+}
+
+/* Hide the default Streamlit header completely */
+header {visibility: hidden !important;}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
     /* Hide default streamlit elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}

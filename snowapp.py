@@ -8,6 +8,26 @@ import logging
 import traceback
 from decimal import Decimal
 import numpy as np
+import base64
+
+# Create a simple base64 encoded logo (you can replace this with your own logo)
+def get_logo_base64():
+    """Create a simple base64 encoded SVG logo"""
+    svg_logo = '''
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="40" height="40" rx="8" fill="url(#grad)" />
+        <defs>
+            <linearGradient id="grad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#667eea"/>
+                <stop offset="1" stop-color="#764ba2"/>
+            </linearGradient>
+        </defs>
+        <text x="8" y="28" font-family="Arial" font-size="20" fill="white" font-weight="bold">DS</text>
+    </svg>
+    '''
+    return base64.b64encode(svg_logo.encode('utf-8')).decode('utf-8')
+
+logo_base64 = get_logo_base64()
 
 try:
     from matplotlib import pyplot as plt
@@ -27,17 +47,48 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    /* Hide default streamlit elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    .main-header {
-        text-align: center;
-        padding: 30px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 10px;
-        margin-bottom: 30px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    
+    /* Make only the header section full width */
+    .header-full {
+        width: 100vw; /* full viewport width */
+        position: relative;
+        left: 50%;
+        right: 50%;
+        margin-left: -50vw;
+        margin-right: -50vw;
+        background: linear-gradient(90deg, #0a0f1e, #13203d, #1f3d6d);
+        padding: 10px 60px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        border-bottom: 2px solid #2c4e8a;
+        z-index: 10;
+        margin-bottom: 20px;
     }
+
+    .header-logo img {
+        height: 40px;
+    }
+
+    .header-text h1 {
+        font-size: 34px;
+        font-weight: 800;
+        color: #ffffff;
+        margin: 0;
+        letter-spacing: 1px;
+    }
+
+    .header-text p {
+        font-size: 16px;
+        color: #b0c4de;
+        margin-top: 5px;
+    }
+    
+    /* Keep your existing styles below */
     .score-box {
         text-align: center;
         padding: 20px;
@@ -907,10 +958,16 @@ if 'username' not in st.session_state:
 def show_login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("""
-        <div class="main-header">
-            <h1>🔧 DeploySure Suite</h1>
-            <p>Snowflake Data Validation & Quality Management</p>
+        # Add the new full-width header
+        st.markdown(f"""
+        <div class="header-full">
+            <div class="header-logo">
+                <img src="data:image/png;base64,{logo_base64}" alt="DeploySure Logo">
+            </div>
+            <div class="header-text">
+                <h1>DeploySure Suite</h1>
+                <p>Snowflake Data Validation & Quality Management</p>
+            </div>
         </div>
         """, unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
@@ -941,10 +998,16 @@ def show_login_page():
 
 # ========== MAIN APP ==========
 def show_main_app():
+    # Add the new full-width header with user info
     st.markdown(f"""
-    <div class="main-header">
-        <h1>🔧 DeploySure Suite</h1>
-        <p>Welcome, {st.session_state.username}!</p>
+    <div class="header-full">
+        <div class="header-logo">
+            <img src="data:image/png;base64,{logo_base64}" alt="DeploySure Logo">
+        </div>
+        <div class="header-text">
+            <h1>DeploySure Suite</h1>
+            <p>Welcome, {st.session_state.username}!</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 

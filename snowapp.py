@@ -11,7 +11,6 @@ import numpy as np
 
 try:
     from matplotlib import pyplot as plt
-    import matplotlib.pyplot as plt
     import seaborn as sns
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
@@ -30,7 +29,6 @@ st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    
     .main-header {
         text-align: center;
         padding: 30px;
@@ -40,7 +38,6 @@ st.markdown("""
         margin-bottom: 30px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    
     .score-box {
         text-align: center;
         padding: 20px;
@@ -49,122 +46,76 @@ st.markdown("""
         font-weight: bold;
         margin: 20px 0;
     }
-    
-    .passed-score {
-        background-color: #d4edda;
-        border: 2px solid #28a745;
-        color: #155724;
-    }
-    
-    .warning-score {
-        background-color: #fff3cd;
-        border: 2px solid #ffc107;
-        color: #856404;
-    }
-    
-    .failed-score {
-        background-color: #f8d7da;
-        border: 2px solid #dc3545;
-        color: #721c24;
-    }
-    
-    .stButton button {
-        width: 100%;
-        border-radius: 8px;
-        font-weight: 600;
-    }
-
+    .passed-score { background-color: #d4edda; border: 2px solid #28a745; color: #155724; }
+    .warning-score { background-color: #fff3cd; border: 2px solid #ffc107; color: #856404; }
+    .failed-score { background-color: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
+    .stButton button { width: 100%; border-radius: 8px; font-weight: 600; }
     .kpi-card {
-        background: white;
-        border-radius: 8px;
-        padding: 16px;
+        background: white; border-radius: 8px; padding: 16px;
         border-left: 4px solid #667eea;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-        margin-bottom: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.08); margin-bottom: 8px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ========== SNOWFLAKE FUNCTIONS ==========
+# ========== SNOWFLAKE FUNCTIONS (ORIGINAL - UNCHANGED) ==========
 def get_snowflake_connection(user, password, account):
     try:
         conn = snowflake.connector.connect(
-            user=user,
-            password=password,
-            account=account,
-            authenticator='snowflake'
+            user=user, password=password, account=account, authenticator='snowflake'
         )
-        logging.info("Successfully connected to Snowflake.")
         return conn, "✅ Successfully connected!"
     except Exception as e:
-        logging.error(f"Connection failed: {str(e)}")
         return None, f"❌ Connection failed: {str(e)}"
 
 def get_databases(conn):
-    if not conn:
-        return []
+    if not conn: return []
     try:
         cursor = conn.cursor()
         cursor.execute("SHOW DATABASES")
         return [row[1] for row in cursor.fetchall()]
-    except Exception as e:
-        logging.error(f"Error getting databases: {str(e)}")
-        return []
+    except: return []
 
 def get_schemas(conn, database):
-    if not conn or not database:
-        return []
+    if not conn or not database: return []
     try:
         cursor = conn.cursor()
         cursor.execute(f"SHOW SCHEMAS IN DATABASE {database}")
         return [row[1] for row in cursor.fetchall()]
-    except Exception as e:
-        logging.error(f"Error getting schemas: {str(e)}")
-        return []
+    except: return []
 
 def get_tables(conn, database, schema):
-    if not conn or not database or not schema:
-        return []
+    if not conn or not database or not schema: return []
     try:
         cursor = conn.cursor()
         cursor.execute(f"SHOW TABLES IN SCHEMA {database}.{schema}")
         tables = [row[1] for row in cursor.fetchall()]
         return [t for t in tables if t.upper() not in ('TEST_CASES', 'ORDER_KPIS')]
-    except Exception as e:
-        logging.error(f"Error getting tables: {str(e)}")
-        return []
+    except: return []
 
 def get_columns_for_table(conn, database, schema, table):
-    if not conn or not database or not schema or not table:
-        return []
+    if not conn or not database or not schema or not table: return []
     try:
         cursor = conn.cursor()
         cursor.execute(f"""
-            SELECT COLUMN_NAME
-            FROM {database}.INFORMATION_SCHEMA.COLUMNS
+            SELECT COLUMN_NAME FROM {database}.INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = '{schema}' AND TABLE_NAME = '{table}'
             ORDER BY ORDINAL_POSITION
         """)
         return [row[0] for row in cursor.fetchall()]
-    except Exception as e:
-        logging.error(f"Error getting columns: {str(e)}")
-        return []
+    except: return []
 
 def _get_column_details_for_dq(conn, database, schema, table):
-    if not conn or not database or not schema or not table:
-        return []
+    if not conn or not database or not schema or not table: return []
     try:
         cursor = conn.cursor()
         cursor.execute(f"""
-            SELECT COLUMN_NAME, DATA_TYPE
-            FROM {database}.INFORMATION_SCHEMA.COLUMNS
+            SELECT COLUMN_NAME, DATA_TYPE FROM {database}.INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = '{schema}' AND TABLE_NAME = '{table}'
             ORDER BY ORDINAL_POSITION
         """)
         return [{'name': row[0], 'type': row[1].upper()} for row in cursor.fetchall()]
-    except Exception as e:
-        logging.error(f"Error getting column details: {str(e)}")
-        return []
+    except: return []
 
 def _categorize_columns_by_type(column_details_list):
     numeric_cols, date_cols, string_cols, all_cols = [], [], [], []
@@ -180,242 +131,155 @@ def _categorize_columns_by_type(column_details_list):
     return all_cols, numeric_cols, date_cols, string_cols
 
 def clone_schema(conn, source_db, source_schema, target_schema):
-    if not conn:
-        return False, "❌ Not connected to Snowflake.", pd.DataFrame()
+    if not conn: return False, "❌ Not connected to Snowflake.", pd.DataFrame()
     if not source_db or not source_schema or not target_schema:
         return False, "⚠️ Please provide all required fields.", pd.DataFrame()
-    
     cursor = conn.cursor()
     try:
         cursor.execute(f"SHOW SCHEMAS LIKE '{source_schema}' IN DATABASE {source_db}")
         if not cursor.fetchall():
             return False, f"❌ Source schema doesn't exist", pd.DataFrame()
-        
-        clone_sql = f"CREATE OR REPLACE SCHEMA {source_db}.{target_schema} CLONE {source_db}.{source_schema}"
-        cursor.execute(clone_sql)
-        
+        cursor.execute(f"CREATE OR REPLACE SCHEMA {source_db}.{target_schema} CLONE {source_db}.{source_schema}")
         cursor.execute(f"SHOW TABLES IN SCHEMA {source_db}.{source_schema}")
         source_tables = [row[1] for row in cursor.fetchall()]
-        
         cursor.execute(f"SHOW TABLES IN SCHEMA {source_db}.{target_schema}")
         clone_tables = [row[1] for row in cursor.fetchall()]
-        
         df = pd.DataFrame({
-            'Database': [source_db],
-            'Source Schema': [source_schema],
-            'Clone Schema': [target_schema],
-            'Source Tables': [len(source_tables)],
+            'Database': [source_db], 'Source Schema': [source_schema],
+            'Clone Schema': [target_schema], 'Source Tables': [len(source_tables)],
             'Cloned Tables': [len(clone_tables)],
             'Status': ['✅ Success' if len(source_tables) == len(clone_tables) else '⚠️ Partial']
         })
-        
         return True, f"✅ Successfully Mirrored Schema", df
     except Exception as e:
-        logging.error(f"Clone failed: {str(e)}")
         return False, f"❌ Clone failed: {str(e)}", pd.DataFrame()
 
 def compare_table_differences(conn, db_name, source_schema, clone_schema):
-    if not conn:
-        return pd.DataFrame()
-    
+    if not conn: return pd.DataFrame()
     cursor = conn.cursor()
     query = f"""
     WITH source_tables AS (
-        SELECT table_name FROM {db_name}.information_schema.tables
-        WHERE table_schema = '{source_schema}'
-    ),
-    clone_tables AS (
-        SELECT table_name FROM {db_name}.information_schema.tables
-        WHERE table_schema = '{clone_schema}'
+        SELECT table_name FROM {db_name}.information_schema.tables WHERE table_schema = '{source_schema}'
+    ), clone_tables AS (
+        SELECT table_name FROM {db_name}.information_schema.tables WHERE table_schema = '{clone_schema}'
     )
-    SELECT
-        COALESCE(s.table_name, c.table_name) AS table_name,
-        CASE
-            WHEN s.table_name IS NULL THEN 'Missing in source'
-            WHEN c.table_name IS NULL THEN 'Missing in clone'
-            ELSE 'Present in both'
-        END AS difference
+    SELECT COALESCE(s.table_name, c.table_name) AS table_name,
+        CASE WHEN s.table_name IS NULL THEN 'Missing in source'
+             WHEN c.table_name IS NULL THEN 'Missing in clone'
+             ELSE 'Present in both' END AS difference
     FROM source_tables s
     FULL OUTER JOIN clone_tables c ON s.table_name = c.table_name
     WHERE s.table_name IS NULL OR c.table_name IS NULL
     ORDER BY difference, table_name
     """
-    
     try:
         cursor.execute(query)
         return pd.DataFrame(cursor.fetchall(), columns=['Table', 'Difference'])
-    except Exception as e:
-        logging.error(f"Error comparing tables: {str(e)}")
-        return pd.DataFrame()
+    except: return pd.DataFrame()
 
 def compare_column_differences(conn, db_name, source_schema, clone_schema):
-    if not conn:
-        return pd.DataFrame(), pd.DataFrame()
-    
+    if not conn: return pd.DataFrame(), pd.DataFrame()
     cursor = conn.cursor()
     try:
         cursor.execute(f"""
-            SELECT s.table_name
-            FROM {db_name}.information_schema.tables s
+            SELECT s.table_name FROM {db_name}.information_schema.tables s
             JOIN {db_name}.information_schema.tables c ON s.table_name = c.table_name
             WHERE s.table_schema = '{source_schema}' AND c.table_schema = '{clone_schema}'
         """)
         common_tables = [row[0] for row in cursor.fetchall()]
-    except Exception as e:
-        return pd.DataFrame(), pd.DataFrame()
-    
+    except: return pd.DataFrame(), pd.DataFrame()
     column_diff_data, datatype_diff_data = [], []
-    
     for table in common_tables:
         try:
             cursor.execute(f"DESCRIBE TABLE {db_name}.{source_schema}.{table}")
             source_cols = {row[0]: row[1] for row in cursor.fetchall()}
-            
             cursor.execute(f"DESCRIBE TABLE {db_name}.{clone_schema}.{table}")
             clone_cols = {row[0]: row[1] for row in cursor.fetchall()}
-            
             all_columns = set(source_cols.keys()).union(set(clone_cols.keys()))
-            
             for col in all_columns:
                 if col not in source_cols:
-                    column_diff_data.append({
-                        'Table': table, 'Column': col, 'Difference': 'Missing in source',
-                        'Source Type': None, 'Clone Type': clone_cols.get(col)
-                    })
+                    column_diff_data.append({'Table': table, 'Column': col, 'Difference': 'Missing in source', 'Source Type': None, 'Clone Type': clone_cols.get(col)})
                 elif col not in clone_cols:
-                    column_diff_data.append({
-                        'Table': table, 'Column': col, 'Difference': 'Missing in clone',
-                        'Source Type': source_cols.get(col), 'Clone Type': None
-                    })
+                    column_diff_data.append({'Table': table, 'Column': col, 'Difference': 'Missing in clone', 'Source Type': source_cols.get(col), 'Clone Type': None})
                 elif source_cols[col] != clone_cols[col]:
-                    datatype_diff_data.append({
-                        'Table': table, 'Column': col,
-                        'Source Type': source_cols[col], 'Clone Type': clone_cols[col],
-                        'Difference': 'Type Changed'
-                    })
-        except:
-            continue
-    
+                    datatype_diff_data.append({'Table': table, 'Column': col, 'Source Type': source_cols[col], 'Clone Type': clone_cols[col], 'Difference': 'Type Changed'})
+        except: continue
     return pd.DataFrame(column_diff_data), pd.DataFrame(datatype_diff_data)
 
 def get_test_case_tables(conn, database, schema):
-    if not conn or not database or not schema:
-        return ["All"]
+    if not conn or not database or not schema: return ["All"]
     try:
         cursor = conn.cursor()
         cursor.execute(f"""
             SELECT COUNT(*) FROM {database}.information_schema.tables
             WHERE table_schema = '{schema}' AND table_name = 'TEST_CASES'
         """)
-        if cursor.fetchone()[0] == 0:
-            return ["All"]
-        
+        if cursor.fetchone()[0] == 0: return ["All"]
         cursor.execute(f"""
             SELECT DISTINCT TABLE_NAME FROM {database}.{schema}.TEST_CASES
             WHERE TABLE_NAME IS NOT NULL ORDER BY TABLE_NAME
         """)
         return ["All"] + [row[0] for row in cursor.fetchall()]
-    except:
-        return ["All"]
+    except: return ["All"]
 
 def get_test_cases(conn, database, schema, table):
-    if not conn or not database or not schema:
-        return []
+    if not conn or not database or not schema: return []
     try:
         cursor = conn.cursor()
         if table == "All":
-            query = f"""
-                SELECT TEST_CASE_ID, TEST_ABBREVIATION, TABLE_NAME,
-                       TEST_DESCRIPTION, SQL_CODE, EXPECTED_RESULT
-                FROM {database}.{schema}.TEST_CASES ORDER BY TEST_CASE_ID
-            """
+            query = f"""SELECT TEST_CASE_ID, TEST_ABBREVIATION, TABLE_NAME, TEST_DESCRIPTION, SQL_CODE, EXPECTED_RESULT
+                        FROM {database}.{schema}.TEST_CASES ORDER BY TEST_CASE_ID"""
         else:
-            query = f"""
-                SELECT TEST_CASE_ID, TEST_ABBREVIATION, TABLE_NAME,
-                       TEST_DESCRIPTION, SQL_CODE, EXPECTED_RESULT
-                FROM {database}.{schema}.TEST_CASES
-                WHERE TABLE_NAME = '{table}' ORDER BY TEST_CASE_ID
-            """
+            query = f"""SELECT TEST_CASE_ID, TEST_ABBREVIATION, TABLE_NAME, TEST_DESCRIPTION, SQL_CODE, EXPECTED_RESULT
+                        FROM {database}.{schema}.TEST_CASES WHERE TABLE_NAME = '{table}' ORDER BY TEST_CASE_ID"""
         cursor.execute(query)
         return cursor.fetchall()
-    except:
-        return []
+    except: return []
 
 def validate_test_cases(conn, database, schema, test_cases):
-    if not conn or not test_cases:
-        return pd.DataFrame(), "❌ No connection or test cases"
-    
+    if not conn or not test_cases: return pd.DataFrame(), "❌ No connection or test cases"
     cursor = conn.cursor()
     results = []
-    
     for case in test_cases:
         test_id, abbrev, table_name, desc, sql, expected = case
         expected = str(expected).strip()
-        
         try:
-            qualified_sql = re.sub(
-                rf'\b{re.escape(table_name)}\b',
-                f'{database}.{schema}.{table_name}',
-                sql, flags=re.IGNORECASE
-            )
+            qualified_sql = re.sub(rf'\b{re.escape(table_name)}\b', f'{database}.{schema}.{table_name}', sql, flags=re.IGNORECASE)
             cursor.execute(qualified_sql)
             result = cursor.fetchone()
             actual = str(result[0]) if result else "0"
             status = "✅ PASS" if actual == expected else "❌ FAIL"
-            
-            results.append({
-                'Test Case': abbrev, 'Category': table_name,
-                'Expected': expected, 'Actual': actual, 'Status': status
-            })
+            results.append({'Test Case': abbrev, 'Category': table_name, 'Expected': expected, 'Actual': actual, 'Status': status})
         except Exception as e:
-            results.append({
-                'Test Case': abbrev, 'Category': table_name,
-                'Expected': expected, 'Actual': f"ERROR: {str(e)[:50]}",
-                'Status': "❌ ERROR"
-            })
-    
+            results.append({'Test Case': abbrev, 'Category': table_name, 'Expected': expected, 'Actual': f"ERROR: {str(e)[:50]}", 'Status': "❌ ERROR"})
     return pd.DataFrame(results), "✅ Validation completed"
 
 def validate_kpis(conn, database, source_schema, target_schema):
-    if not conn:
-        return pd.DataFrame(), "❌ Not connected"
-    
+    if not conn: return pd.DataFrame(), "❌ Not connected"
     cursor = conn.cursor()
     try:
         cursor.execute(f"SELECT KPI_ID, KPI_NAME, KPI_VALUE FROM {database}.{source_schema}.ORDER_KPIS")
         kpis = cursor.fetchall()
-        
-        if not kpis:
-            return pd.DataFrame(), "⚠️ No KPIs found"
-        
+        if not kpis: return pd.DataFrame(), "⚠️ No KPIs found"
         results = []
         for kpi_id, kpi_name, kpi_sql in kpis:
             try:
                 source_query = re.sub(r'\bORDER_DATA\b', f'{database}.{source_schema}.ORDER_DATA', kpi_sql, flags=re.IGNORECASE)
                 cursor.execute(source_query)
                 source_val = cursor.fetchone()[0]
-            except:
-                source_val = "ERROR"
-            
+            except: source_val = "ERROR"
             try:
                 clone_query = re.sub(r'\bORDER_DATA\b', f'{database}.{target_schema}.ORDER_DATA', kpi_sql, flags=re.IGNORECASE)
                 cursor.execute(clone_query)
                 clone_val = cursor.fetchone()[0]
-            except:
-                clone_val = "ERROR"
-            
+            except: clone_val = "ERROR"
             if isinstance(source_val, (int, float)) and isinstance(clone_val, (int, float)):
                 diff = float(source_val) - float(clone_val)
                 status = '✅ Match' if diff == 0 else '⚠️ Mismatch'
             else:
                 diff = "N/A"
                 status = '✅ Match' if str(source_val) == str(clone_val) else '⚠️ Mismatch'
-            
-            results.append({
-                'KPI': kpi_name, 'Source': source_val,
-                'Clone': clone_val, 'Difference': diff, 'Status': status
-            })
-        
+            results.append({'KPI': kpi_name, 'Source': source_val, 'Clone': clone_val, 'Difference': diff, 'Status': status})
         return pd.DataFrame(results), "✅ KPI validation completed"
     except Exception as e:
         return pd.DataFrame(), f"❌ Failed: {str(e)}"
@@ -423,70 +287,40 @@ def validate_kpis(conn, database, source_schema, target_schema):
 class DataQualityValidator:
     def __init__(self, conn):
         self.conn = conn
-    
     def _execute_query(self, query):
         cursor = self.conn.cursor()
         cursor.execute(query)
         return pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description])
-    
     def _run_row_count_check(self, database, schema, table, min_rows):
-        query = f"SELECT COUNT(*) FROM {database}.{schema}.{table}"
-        count = self._execute_query(query).iloc[0, 0]
+        count = self._execute_query(f"SELECT COUNT(*) FROM {database}.{schema}.{table}").iloc[0, 0]
         status = "✅ Pass" if count >= min_rows else "❌ Fail"
-        return {
-            "Check": "Row Count", "Column": "N/A",
-            "Expected": f">= {min_rows}", "Actual": count,
-            "Status": status, "Details": f"Rows: {count}"
-        }
-    
+        return {"Check": "Row Count", "Column": "N/A", "Expected": f">= {min_rows}", "Actual": count, "Status": status, "Details": f"Rows: {count}"}
     def _run_duplicate_check(self, database, schema, table):
         columns = _get_column_details_for_dq(self.conn, database, schema, table)
         if not columns:
-            return {
-                "Check": "Duplicates", "Column": "All",
-                "Expected": "0", "Actual": "N/A",
-                "Status": "⚠️ N/A", "Details": "No columns"
-            }
-        
+            return {"Check": "Duplicates", "Column": "All", "Expected": "0", "Actual": "N/A", "Status": "⚠️ N/A", "Details": "No columns"}
         cols_str = ", ".join([f'"{col["name"]}"' for col in columns])
-        query = f"""
-        SELECT COUNT(*) FROM (
-            SELECT {cols_str} FROM {database}.{schema}.{table}
-            GROUP BY {cols_str} HAVING COUNT(*) > 1
-        )
-        """
-        dup_count = self._execute_query(query).iloc[0, 0]
+        dup_count = self._execute_query(f"""
+            SELECT COUNT(*) FROM (
+                SELECT {cols_str} FROM {database}.{schema}.{table}
+                GROUP BY {cols_str} HAVING COUNT(*) > 1
+            )""").iloc[0, 0]
         status = "✅ Pass" if dup_count == 0 else "❌ Fail"
-        return {
-            "Check": "Duplicates", "Column": "All",
-            "Expected": "0", "Actual": dup_count,
-            "Status": status, "Details": f"Duplicates: {dup_count}"
-        }
-    
+        return {"Check": "Duplicates", "Column": "All", "Expected": "0", "Actual": dup_count, "Status": status, "Details": f"Duplicates: {dup_count}"}
     def run_checks(self, database, schema, table, check_row_count, min_rows, check_duplicates):
         results = []
         total = passed = failed = 0
-        
         if check_row_count:
             res = self._run_row_count_check(database, schema, table, min_rows)
-            results.append(res)
-            total += 1
-            if res["Status"] == "✅ Pass":
-                passed += 1
-            else:
-                failed += 1
-        
+            results.append(res); total += 1
+            passed += 1 if res["Status"] == "✅ Pass" else 0
+            failed += 1 if res["Status"] != "✅ Pass" else 0
         if check_duplicates:
             res = self._run_duplicate_check(database, schema, table)
-            results.append(res)
-            total += 1
-            if res["Status"] == "✅ Pass":
-                passed += 1
-            else:
-                failed += 1
-        
+            results.append(res); total += 1
+            passed += 1 if res["Status"] == "✅ Pass" else 0
+            failed += 1 if res["Status"] != "✅ Pass" else 0
         score = (passed / total * 100) if total > 0 else 0
-        
         summary = pd.DataFrame([
             {"Metric": "Table", "Value": f"{database}.{schema}.{table}"},
             {"Metric": "Total Checks", "Value": total},
@@ -494,224 +328,53 @@ class DataQualityValidator:
             {"Metric": "Failed", "Value": failed},
             {"Metric": "Score", "Value": f"{score:.1f}%"}
         ])
-        
-        details = pd.DataFrame(results)
-        
-        return summary, details, score
+        return summary, pd.DataFrame(results), score
 
 
-# ========== PERFORMANCE MONITORING FUNCTIONS (FROM GRADIO APP) ==========
+# ========== PERFORMANCE MONITORING FUNCTIONS ==========
 
-def _build_where_clause(start_date, end_date, database=None, schema=None, warehouse=None, user=None, query_type=None):
-    where_clauses = [f"START_TIME BETWEEN '{start_date}' AND '{end_date}'"]
-    if database and database != "All":
-        where_clauses.append(f"DATABASE_NAME = '{database}'")
-    if schema and schema != "All":
-        where_clauses.append(f"SCHEMA_NAME = '{schema}'")
-    if warehouse and warehouse != "All":
-        where_clauses.append(f"WAREHOUSE_NAME = '{warehouse}'")
-    if user and user != "All":
-        where_clauses.append(f"USER_NAME = '{user}'")
-    if query_type and query_type != "All":
-        where_clauses.append(f"QUERY_TYPE = '{query_type}'")
-    return "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
-
-def _execute_perf_query(conn, query):
+def _execute_perf_query(conn, query, error_context=""):
+    """Execute a query and return DataFrame. Returns empty DataFrame with error message on failure."""
     try:
         cursor = conn.cursor()
         cursor.execute(query)
-        df = pd.DataFrame(cursor.fetchall(), columns=[desc[0] for desc in cursor.description])
+        rows = cursor.fetchall()
+        if not rows:
+            return pd.DataFrame()
+        cols = [desc[0] for desc in cursor.description]
+        df = pd.DataFrame(rows, columns=cols)
+        # Convert Decimal/numeric types
         for col in df.columns:
             try:
-                df[col] = pd.to_numeric(df[col], errors='ignore')
+                converted = pd.to_numeric(df[col], errors='ignore')
+                if converted.dtype != object:
+                    df[col] = converted
             except:
                 pass
         return df
     except Exception as e:
-        logging.error(f"Query error: {str(e)}")
-        return pd.DataFrame()
+        logging.error(f"Query error {error_context}: {str(e)}\nQuery: {query[:200]}")
+        raise  # Re-raise so callers can show specific error messages
 
-def fetch_longest_running_queries(conn, start_date, end_date, database, schema, warehouse, user, query_type):
-    where_clause = _build_where_clause(start_date, end_date, database, schema, warehouse, user, query_type)
-    query = f"""
-    SELECT QUERY_ID as "Query ID", ROUND(EXECUTION_TIME/1000, 2) as "Exec Time (s)", 
-           USER_NAME as "User", START_TIME as "Start Time", WAREHOUSE_NAME as "Warehouse",
-           LEFT(QUERY_TEXT, 100) as "Query Preview"
-    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
-    {where_clause}
-    ORDER BY "Exec Time (s)" DESC LIMIT 10
-    """
-    return _execute_perf_query(conn, query)
-
-def fetch_expensive_queries(conn, start_date, end_date, database, schema, warehouse, user, query_type):
-    where_clause = _build_where_clause(start_date, end_date, database, schema, warehouse, user, query_type)
-    query = f"""
-    SELECT qh.QUERY_ID AS "Query ID", LEFT(qh.QUERY_TEXT, 100) AS "Query Preview",
-           qh.USER_NAME AS "User", qh.WAREHOUSE_NAME AS "Warehouse",
-           SUM(wmh.CREDITS_USED) AS "Credits Consumed", qh.START_TIME AS "Start Time"
-    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY qh
-    JOIN SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY wmh
-        ON qh.WAREHOUSE_ID = wmh.WAREHOUSE_ID
-        AND qh.START_TIME BETWEEN wmh.START_TIME AND wmh.END_TIME
-    {where_clause}
-    GROUP BY qh.QUERY_ID, qh.QUERY_TEXT, qh.USER_NAME, qh.WAREHOUSE_NAME, qh.START_TIME
-    ORDER BY "Credits Consumed" DESC LIMIT 10
-    """
-    return _execute_perf_query(conn, query)
-
-def fetch_top_frequent_queries(conn, start_date, end_date, database, schema, warehouse, user, query_type):
-    where_clause = _build_where_clause(start_date, end_date, database, schema, warehouse, user, query_type)
-    query = f"""
-    SELECT LEFT(QUERY_TEXT, 100) as "Query Preview", COUNT(*) as "Execution Count", 
-           USER_NAME as "User", AVG(ROUND(EXECUTION_TIME/1000, 2)) as "Avg Exec Time (s)"
-    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
-    {where_clause}
-    GROUP BY QUERY_TEXT, USER_NAME
-    ORDER BY "Execution Count" DESC LIMIT 10
-    """
-    return _execute_perf_query(conn, query)
-
-def fetch_failed_queries(conn, start_date, end_date, database, schema, warehouse, user):
-    where_clause = _build_where_clause(start_date, end_date, database, schema, warehouse, user, None)
-    where_clause_failed = where_clause.replace("WHERE ", "WHERE EXECUTION_STATUS != 'SUCCESS' AND ", 1) if where_clause else "WHERE EXECUTION_STATUS != 'SUCCESS'"
-    query = f"""
-    SELECT QUERY_ID AS "Query ID", LEFT(QUERY_TEXT, 100) AS "Query Preview",
-           USER_NAME AS "User", LEFT(ERROR_MESSAGE, 150) AS "Error", START_TIME AS "Start Time"
-    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
-    {where_clause_failed}
-    ORDER BY START_TIME DESC LIMIT 50
-    """
-    return _execute_perf_query(conn, query)
-
-def fetch_top_active_users(conn, start_date, end_date, database, schema, query_type):
-    where_clause = _build_where_clause(start_date, end_date, database, schema, None, None, query_type)
-    query = f"""
-    SELECT USER_NAME as "User", COUNT(*) as "Query Count", 
-           COUNT(DISTINCT SESSION_ID) as "Sessions",
-           ROUND(SUM(EXECUTION_TIME/1000), 2) as "Total Exec Time (s)"
-    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
-    {where_clause}
-    GROUP BY USER_NAME ORDER BY "Query Count" DESC LIMIT 10
-    """
-    return _execute_perf_query(conn, query)
-
-def fetch_active_users_over_time(conn, start_date, end_date, database, schema, warehouse, user, query_type):
-    where_clause = _build_where_clause(start_date, end_date, database, schema, warehouse, user, query_type)
-    query = f"""
-    SELECT TO_DATE(START_TIME) AS "Date", COUNT(DISTINCT USER_NAME) AS "Active Users"
-    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
-    {where_clause}
-    GROUP BY 1 ORDER BY 1
-    """
-    return _execute_perf_query(conn, query)
-
-def fetch_warehouse_credits(conn, start_date, end_date, warehouse):
-    where_clause = f"WHERE START_TIME BETWEEN '{start_date}' AND '{end_date}'"
+def _build_where_conditions(start_date, end_date, database=None, schema=None,
+                             warehouse=None, user=None, query_type=None,
+                             extra_conditions=None, table_alias=""):
+    """Build a list of WHERE conditions (no WHERE keyword). Extra safety for nulls."""
+    prefix = f"{table_alias}." if table_alias else ""
+    conditions = [f"{prefix}START_TIME BETWEEN '{start_date}' AND '{end_date}'"]
+    if database and database != "All":
+        conditions.append(f"{prefix}DATABASE_NAME = '{database}'")
+    if schema and schema != "All":
+        conditions.append(f"{prefix}SCHEMA_NAME = '{schema}'")
     if warehouse and warehouse != "All":
-        where_clause += f" AND WAREHOUSE_NAME = '{warehouse}'"
-    query = f"""
-    SELECT WAREHOUSE_NAME as "Warehouse", TO_DATE(START_TIME) as "Date",
-           SUM(CREDITS_USED) as "Credits Used",
-           SUM(CREDITS_USED_COMPUTE) as "Compute Credits",
-           SUM(CREDITS_USED_CLOUD_SERVICES) as "Cloud Services Credits"
-    FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
-    {where_clause}
-    GROUP BY WAREHOUSE_NAME, TO_DATE(START_TIME)
-    ORDER BY "Date" ASC, "Credits Used" DESC
-    """
-    return _execute_perf_query(conn, query)
-
-def fetch_credit_usage_over_time(conn, start_date, end_date, warehouse):
-    where_clause = f"WHERE START_TIME BETWEEN '{start_date}' AND '{end_date}'"
-    if warehouse and warehouse != "All":
-        where_clause += f" AND WAREHOUSE_NAME = '{warehouse}'"
-    date_diff = (datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days
-    if date_diff <= 31:
-        date_expr = "TO_DATE(START_TIME)"
-        date_col = "Date"
-    else:
-        date_expr = "TO_CHAR(START_TIME, 'YYYY-MM')"
-        date_col = "Month"
-    query = f"""
-    SELECT {date_expr} AS "{date_col}", SUM(CREDITS_USED) AS "Credits Used"
-    FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
-    {where_clause}
-    GROUP BY {date_expr} ORDER BY {date_expr}
-    """
-    return _execute_perf_query(conn, query), date_col
-
-def fetch_cost_heatmap_data(conn, start_date, end_date, warehouse):
-    where_clause = f"WHERE START_TIME BETWEEN '{start_date}' AND '{end_date}'"
-    if warehouse and warehouse != "All":
-        where_clause += f" AND WAREHOUSE_NAME = '{warehouse}'"
-    query = f"""
-    SELECT TO_CHAR(START_TIME, 'DY') AS "DayOfWeek", 
-           EXTRACT(HOUR FROM START_TIME) AS "HourOfDay", 
-           SUM(CREDITS_USED) AS "Credits"
-    FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
-    {where_clause}
-    GROUP BY 1, 2
-    """
-    return _execute_perf_query(conn, query)
-
-def fetch_warehouse_utilization(conn, start_date, end_date, warehouse):
-    where_clause = f"WHERE START_TIME BETWEEN '{start_date}' AND '{end_date}'"
-    if warehouse and warehouse != "All":
-        where_clause += f" AND WAREHOUSE_NAME = '{warehouse}'"
-    query = f"""
-    SELECT WAREHOUSE_NAME as "Warehouse", TO_DATE(START_TIME) as "Date",
-           AVG(AVG_RUNNING) as "Avg Running",
-           AVG(AVG_QUEUED_LOAD) as "Avg Queued",
-           AVG(AVG_BLOCKED) as "Avg Blocked"
-    FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_LOAD_HISTORY
-    {where_clause}
-    GROUP BY 1, 2 ORDER BY 1, 2
-    """
-    return _execute_perf_query(conn, query)
-
-def fetch_daily_storage_usage(conn, start_date, end_date):
-    query = f"""
-    SELECT USAGE_DATE as "Date",
-           AVERAGE_DATABASE_BYTES/POWER(1024,3) as "Avg DB Storage (GB)",
-           AVERAGE_FAILSAFE_BYTES/POWER(1024,3) as "Avg Failsafe (GB)"
-    FROM SNOWFLAKE.ACCOUNT_USAGE.DATABASE_STORAGE_USAGE_HISTORY
-    WHERE USAGE_DATE BETWEEN '{start_date}' AND '{end_date}'
-    ORDER BY "Date" ASC
-    """
-    return _execute_perf_query(conn, query)
-
-def fetch_table_storage_metrics(conn, database, schema):
-    if not database or database == "All" or not schema or schema == "All":
-        return pd.DataFrame()
-    query = f"""
-    SELECT TABLE_NAME as "Table",
-           ACTIVE_BYTES/POWER(1024,2) as "Active Size (MB)",
-           TIME_TRAVEL_BYTES/POWER(1024,2) as "Time Travel (MB)"
-    FROM SNOWFLAKE.ACCOUNT_USAGE.TABLE_STORAGE_METRICS
-    WHERE TABLE_CATALOG = '{database}' AND TABLE_SCHEMA = '{schema}'
-    ORDER BY "Active Size (MB)" DESC
-    """
-    return _execute_perf_query(conn, query)
-
-def get_all_users(conn):
-    if not conn:
-        return ["All"]
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT USER_NAME FROM SNOWFLAKE.ACCOUNT_USAGE.USERS WHERE DELETED_ON IS NULL ORDER BY USER_NAME")
-        return ["All"] + [row[0] for row in cursor.fetchall()]
-    except:
-        return ["All"]
-
-def get_all_warehouses(conn):
-    if not conn:
-        return ["All"]
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SHOW WAREHOUSES")
-        return ["All"] + [row[0] for row in cursor.fetchall()]
-    except:
-        return ["All"]
+        conditions.append(f"{prefix}WAREHOUSE_NAME = '{warehouse}'")
+    if user and user != "All":
+        conditions.append(f"{prefix}USER_NAME = '{user}'")
+    if query_type and query_type != "All":
+        conditions.append(f"{prefix}QUERY_TYPE = '{query_type}'")
+    if extra_conditions:
+        conditions.extend(extra_conditions)
+    return "WHERE " + " AND ".join(conditions)
 
 def get_date_range(time_range_str):
     end = datetime.now()
@@ -725,6 +388,265 @@ def get_date_range(time_range_str):
         start = end - timedelta(days=7)
     return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
+def get_all_users(conn):
+    if not conn: return ["All"]
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT USER_NAME FROM SNOWFLAKE.ACCOUNT_USAGE.USERS WHERE DELETED_ON IS NULL ORDER BY USER_NAME")
+        return ["All"] + [row[0] for row in cursor.fetchall()]
+    except: return ["All"]
+
+def get_all_warehouses(conn):
+    if not conn: return ["All"]
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SHOW WAREHOUSES")
+        return ["All"] + [row[0] for row in cursor.fetchall()]
+    except: return ["All"]
+
+# ---- Query Performance ----
+def fetch_longest_running_queries(conn, start_date, end_date, database, schema, warehouse, user, query_type):
+    where = _build_where_conditions(start_date, end_date, database, schema, warehouse, user, query_type)
+    query = f"""
+    SELECT QUERY_ID AS "Query ID",
+           ROUND(EXECUTION_TIME / 1000, 2) AS "Exec Time (s)",
+           USER_NAME AS "User",
+           START_TIME AS "Start Time",
+           WAREHOUSE_NAME AS "Warehouse",
+           LEFT(QUERY_TEXT, 120) AS "Query Preview"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+    {where}
+    ORDER BY EXECUTION_TIME DESC
+    LIMIT 10
+    """
+    return _execute_perf_query(conn, query, "longest_running")
+
+def fetch_expensive_queries(conn, start_date, end_date, database, schema, warehouse, user, query_type):
+    """Expensive by bytes scanned (avoids complex JOIN with metering history)."""
+    where = _build_where_conditions(start_date, end_date, database, schema, warehouse, user, query_type)
+    query = f"""
+    SELECT QUERY_ID AS "Query ID",
+           LEFT(QUERY_TEXT, 120) AS "Query Preview",
+           USER_NAME AS "User",
+           WAREHOUSE_NAME AS "Warehouse",
+           BYTES_SCANNED AS "Bytes Scanned",
+           ROUND(EXECUTION_TIME / 1000, 2) AS "Exec Time (s)",
+           START_TIME AS "Start Time"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+    {where}
+    ORDER BY BYTES_SCANNED DESC NULLS LAST
+    LIMIT 10
+    """
+    return _execute_perf_query(conn, query, "expensive_queries")
+
+def fetch_top_frequent_queries(conn, start_date, end_date, database, schema, warehouse, user, query_type):
+    where = _build_where_conditions(start_date, end_date, database, schema, warehouse, user, query_type)
+    query = f"""
+    SELECT LEFT(QUERY_TEXT, 120) AS "Query Preview",
+           COUNT(*) AS "Execution Count",
+           USER_NAME AS "User",
+           ROUND(AVG(EXECUTION_TIME / 1000), 2) AS "Avg Exec Time (s)"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+    {where}
+    GROUP BY QUERY_TEXT, USER_NAME
+    ORDER BY COUNT(*) DESC
+    LIMIT 10
+    """
+    return _execute_perf_query(conn, query, "frequent_queries")
+
+def fetch_failed_queries(conn, start_date, end_date, database, schema, warehouse, user):
+    where = _build_where_conditions(
+        start_date, end_date, database, schema, warehouse, user,
+        extra_conditions=["EXECUTION_STATUS != 'SUCCESS'"]
+    )
+    query = f"""
+    SELECT QUERY_ID AS "Query ID",
+           LEFT(QUERY_TEXT, 120) AS "Query Preview",
+           USER_NAME AS "User",
+           LEFT(ERROR_MESSAGE, 200) AS "Error",
+           START_TIME AS "Start Time",
+           EXECUTION_STATUS AS "Status"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+    {where}
+    ORDER BY START_TIME DESC
+    LIMIT 50
+    """
+    return _execute_perf_query(conn, query, "failed_queries")
+
+def fetch_query_profile_summary(conn, start_date, end_date, database, schema, warehouse, user, query_type):
+    where = _build_where_conditions(
+        start_date, end_date, database, schema, warehouse, user, query_type,
+        extra_conditions=["QUERY_TYPE IN ('SELECT','INSERT','UPDATE','DELETE','MERGE')"]
+    )
+    query = f"""
+    SELECT QUERY_ID AS "Query ID",
+           USER_NAME AS "User",
+           WAREHOUSE_NAME AS "Warehouse",
+           EXECUTION_STATUS AS "Status",
+           ROUND(TOTAL_ELAPSED_TIME / 1000, 2) AS "Elapsed (s)",
+           ROUND(COMPILATION_TIME / 1000, 2) AS "Compile (s)",
+           ROUND(EXECUTION_TIME / 1000, 2) AS "Exec (s)",
+           BYTES_SCANNED AS "Bytes Scanned",
+           ROWS_PRODUCED AS "Rows Produced"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+    {where}
+    ORDER BY COMPILATION_TIME DESC NULLS LAST
+    LIMIT 10
+    """
+    return _execute_perf_query(conn, query, "query_profile")
+
+# ---- User Adoption ----
+def fetch_top_active_users(conn, start_date, end_date, database, schema, query_type):
+    where = _build_where_conditions(start_date, end_date, database, schema, query_type=query_type)
+    query = f"""
+    SELECT USER_NAME AS "User",
+           COUNT(*) AS "Query Count",
+           COUNT(DISTINCT SESSION_ID) AS "Sessions",
+           ROUND(SUM(EXECUTION_TIME / 1000), 2) AS "Total Exec Time (s)"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+    {where}
+    GROUP BY USER_NAME
+    ORDER BY "Query Count" DESC
+    LIMIT 10
+    """
+    return _execute_perf_query(conn, query, "top_active_users")
+
+def fetch_active_users_over_time(conn, start_date, end_date, database, schema, warehouse, user, query_type):
+    where = _build_where_conditions(start_date, end_date, database, schema, warehouse, user, query_type)
+    query = f"""
+    SELECT TO_DATE(START_TIME) AS "Date",
+           COUNT(DISTINCT USER_NAME) AS "Active Users"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+    {where}
+    GROUP BY TO_DATE(START_TIME)
+    ORDER BY TO_DATE(START_TIME)
+    """
+    return _execute_perf_query(conn, query, "users_over_time")
+
+def fetch_queries_per_user(conn, start_date, end_date, database, schema, warehouse, user):
+    where = _build_where_conditions(start_date, end_date, database, schema, warehouse, user)
+    query = f"""
+    SELECT USER_NAME AS "User", COUNT(*) AS "Query Count"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+    {where}
+    GROUP BY USER_NAME
+    ORDER BY "Query Count" DESC
+    LIMIT 10
+    """
+    return _execute_perf_query(conn, query, "queries_per_user")
+
+# ---- Compute Cost ----
+def fetch_warehouse_credits(conn, start_date, end_date, warehouse):
+    conditions = [f"START_TIME BETWEEN '{start_date}' AND '{end_date}'"]
+    if warehouse and warehouse != "All":
+        conditions.append(f"WAREHOUSE_NAME = '{warehouse}'")
+    where = "WHERE " + " AND ".join(conditions)
+    query = f"""
+    SELECT WAREHOUSE_NAME AS "Warehouse",
+           TO_DATE(START_TIME) AS "Date",
+           ROUND(SUM(CREDITS_USED), 4) AS "Credits Used",
+           ROUND(SUM(CREDITS_USED_COMPUTE), 4) AS "Compute Credits",
+           ROUND(SUM(CREDITS_USED_CLOUD_SERVICES), 4) AS "Cloud Services Credits"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
+    {where}
+    GROUP BY WAREHOUSE_NAME, TO_DATE(START_TIME)
+    ORDER BY TO_DATE(START_TIME) ASC, "Credits Used" DESC
+    """
+    return _execute_perf_query(conn, query, "warehouse_credits")
+
+def fetch_credit_usage_over_time(conn, start_date, end_date, warehouse):
+    conditions = [f"START_TIME BETWEEN '{start_date}' AND '{end_date}'"]
+    if warehouse and warehouse != "All":
+        conditions.append(f"WAREHOUSE_NAME = '{warehouse}'")
+    where = "WHERE " + " AND ".join(conditions)
+    date_diff = (datetime.strptime(end_date, "%Y-%m-%d") - datetime.strptime(start_date, "%Y-%m-%d")).days
+    if date_diff <= 31:
+        date_expr = "TO_DATE(START_TIME)"
+        date_col = "Date"
+    else:
+        date_expr = "TO_CHAR(START_TIME, 'YYYY-MM')"
+        date_col = "Month"
+    query = f"""
+    SELECT {date_expr} AS "{date_col}",
+           ROUND(SUM(CREDITS_USED), 4) AS "Credits Used"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
+    {where}
+    GROUP BY {date_expr}
+    ORDER BY {date_expr}
+    """
+    return _execute_perf_query(conn, query, "credit_over_time"), date_col
+
+def fetch_cost_heatmap_data(conn, start_date, end_date, warehouse):
+    conditions = [f"START_TIME BETWEEN '{start_date}' AND '{end_date}'"]
+    if warehouse and warehouse != "All":
+        conditions.append(f"WAREHOUSE_NAME = '{warehouse}'")
+    where = "WHERE " + " AND ".join(conditions)
+    query = f"""
+    SELECT TO_CHAR(START_TIME, 'DY') AS "DayOfWeek",
+           EXTRACT(HOUR FROM START_TIME) AS "HourOfDay",
+           ROUND(SUM(CREDITS_USED), 4) AS "Credits"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
+    {where}
+    GROUP BY TO_CHAR(START_TIME, 'DY'), EXTRACT(HOUR FROM START_TIME)
+    """
+    return _execute_perf_query(conn, query, "cost_heatmap")
+
+# ---- Storage ----
+def fetch_daily_storage_usage(conn, start_date, end_date):
+    query = f"""
+    SELECT USAGE_DATE AS "Date",
+           ROUND(AVERAGE_DATABASE_BYTES / POWER(1024, 3), 4) AS "Avg DB Storage (GB)",
+           ROUND(AVERAGE_FAILSAFE_BYTES / POWER(1024, 3), 4) AS "Avg Failsafe (GB)"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.DATABASE_STORAGE_USAGE_HISTORY
+    WHERE USAGE_DATE BETWEEN '{start_date}' AND '{end_date}'
+    ORDER BY USAGE_DATE ASC
+    """
+    return _execute_perf_query(conn, query, "daily_storage")
+
+def fetch_table_storage_metrics(conn, database, schema):
+    if not database or database == "All" or not schema or schema == "All":
+        return pd.DataFrame()
+    query = f"""
+    SELECT TABLE_NAME AS "Table",
+           ROUND(ACTIVE_BYTES / POWER(1024, 2), 2) AS "Active Size (MB)",
+           ROUND(TIME_TRAVEL_BYTES / POWER(1024, 2), 2) AS "Time Travel (MB)"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.TABLE_STORAGE_METRICS
+    WHERE TABLE_CATALOG = '{database}' AND TABLE_SCHEMA = '{schema}'
+    ORDER BY ACTIVE_BYTES DESC NULLS LAST
+    LIMIT 100
+    """
+    return _execute_perf_query(conn, query, "table_storage")
+
+def fetch_total_storage_over_time(conn):
+    query = """
+    SELECT USAGE_DATE AS "Date",
+           ROUND(STORAGE_BYTES / POWER(1024, 3), 4) AS "Total Storage (GB)"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.STORAGE_USAGE
+    ORDER BY USAGE_DATE DESC
+    LIMIT 90
+    """
+    return _execute_perf_query(conn, query, "total_storage")
+
+# ---- Warehouse Activity ----
+def fetch_warehouse_utilization(conn, start_date, end_date, warehouse):
+    conditions = [f"START_TIME BETWEEN '{start_date}' AND '{end_date}'"]
+    if warehouse and warehouse != "All":
+        conditions.append(f"WAREHOUSE_NAME = '{warehouse}'")
+    where = "WHERE " + " AND ".join(conditions)
+    query = f"""
+    SELECT WAREHOUSE_NAME AS "Warehouse",
+           TO_DATE(START_TIME) AS "Date",
+           ROUND(AVG(AVG_RUNNING), 4) AS "Avg Running",
+           ROUND(AVG(AVG_QUEUED_LOAD), 4) AS "Avg Queued",
+           ROUND(AVG(AVG_QUEUED_PROVISIONING), 4) AS "Avg Queued Prov.",
+           ROUND(AVG(AVG_BLOCKED), 4) AS "Avg Blocked"
+    FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_LOAD_HISTORY
+    {where}
+    GROUP BY WAREHOUSE_NAME, TO_DATE(START_TIME)
+    ORDER BY WAREHOUSE_NAME, TO_DATE(START_TIME)
+    """
+    return _execute_perf_query(conn, query, "warehouse_utilization")
+
 
 # ========== SESSION STATE ==========
 if 'conn' not in st.session_state:
@@ -734,10 +656,10 @@ if 'is_logged_in' not in st.session_state:
 if 'username' not in st.session_state:
     st.session_state.username = ""
 
+
 # ========== LOGIN PAGE ==========
 def show_login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
-    
     with col2:
         st.markdown("""
         <div class="main-header">
@@ -745,25 +667,18 @@ def show_login_page():
             <p>Snowflake Data Validation & Quality Management</p>
         </div>
         """, unsafe_allow_html=True)
-        
         st.markdown("<br>", unsafe_allow_html=True)
-        
         st.subheader("🔐 Sign in to Snowflake")
-        
         with st.form("login_form"):
             username = st.text_input("Username", placeholder="your_username")
             password = st.text_input("Password", type="password", placeholder="••••••••")
             account = st.text_input("Account", placeholder="account.region")
-            
             st.markdown("<br>", unsafe_allow_html=True)
-            
             login_button = st.form_submit_button("🔓 Connect", use_container_width=True, type="primary")
-            
             if login_button:
                 if username and password and account:
                     with st.spinner("🔄 Connecting..."):
                         conn, msg = get_snowflake_connection(username, password, account)
-                        
                         if conn:
                             st.session_state.conn = conn
                             st.session_state.is_logged_in = True
@@ -774,9 +689,9 @@ def show_login_page():
                             st.error(msg)
                 else:
                     st.warning("⚠️ Please fill in all fields")
-        
         st.markdown("<br>", unsafe_allow_html=True)
         st.info("💡 **Tip:** Ensure you have proper Snowflake credentials and network access")
+
 
 # ========== MAIN APP ==========
 def show_main_app():
@@ -786,65 +701,50 @@ def show_main_app():
         <p>Welcome, {st.session_state.username}!</p>
     </div>
     """, unsafe_allow_html=True)
-    
-    # Sidebar
+
     with st.sidebar:
         st.success(f"✅ **{st.session_state.username}**")
-        
         if st.button("🔓 Disconnect", use_container_width=True):
             if st.session_state.conn:
                 st.session_state.conn.close()
             st.session_state.conn = None
             st.session_state.is_logged_in = False
             st.rerun()
-        
         st.markdown("---")
         try:
             dbs = get_databases(st.session_state.conn)
             st.metric("Databases", len(dbs))
-        except:
-            pass
-    
-    # Main tabs - now 3 tabs
+        except: pass
+
     tab1, tab2, tab3 = st.tabs(["⎘ MirrorSchema", "🔍 DriftWatch", "📊 Performance Monitoring"])
-    
-    # ===== MIRROR SCHEMA =====
+
+    # ===== MIRROR SCHEMA (ORIGINAL - UNCHANGED) =====
     with tab1:
         st.header("Mirror Schema")
         col1, col2 = st.columns([1, 2])
-        
         with col1:
             st.subheader("📋 Configuration")
-            
             databases = get_databases(st.session_state.conn)
             if not databases:
                 st.warning("No databases found")
                 return
-            
             source_db = st.selectbox("Source Database", databases)
-            
             if source_db:
                 schemas = get_schemas(st.session_state.conn, source_db)
                 if schemas:
                     source_schema = st.selectbox("Source Schema", schemas)
                     target_schema = st.text_input("Target Schema", value=f"{source_schema}_CLONE")
-                    
                     if st.button("🚀 Execute MirrorSchema", type="primary", use_container_width=True):
                         if target_schema:
                             with st.spinner("Mirroring..."):
-                                success, msg, df = clone_schema(
-                                    st.session_state.conn, source_db, source_schema, target_schema
-                                )
-                                
+                                success, msg, df = clone_schema(st.session_state.conn, source_db, source_schema, target_schema)
                                 if success:
                                     st.success(msg)
-                                    if not df.empty:
-                                        st.dataframe(df, use_container_width=True)
+                                    if not df.empty: st.dataframe(df, use_container_width=True)
                                 else:
                                     st.error(msg)
                 else:
                     st.warning("No schemas found")
-        
         with col2:
             st.subheader("ℹ️ Information")
             st.info("""
@@ -855,483 +755,368 @@ def show_main_app():
             - Table structures
             - Constraints
             """)
-    
-    # ===== DRIFTWATCH =====
+
+    # ===== DRIFTWATCH (ORIGINAL - UNCHANGED) =====
     with tab2:
         st.header("DriftWatch")
-        
         validation_type = st.selectbox(
             "Validation Type",
             ["Schema Validation", "KPI Validation", "Test Case Validation", "Data Quality Validation"]
         )
-        
         st.markdown("---")
-        
-        # === SCHEMA VALIDATION ===
+
         if validation_type == "Schema Validation":
             col1, col2 = st.columns([1, 2])
-            
             with col1:
                 st.subheader("📋 Configuration")
                 databases = get_databases(st.session_state.conn)
                 val_db = st.selectbox("Database", databases, key="schema_db")
-                
                 if val_db:
                     schemas = get_schemas(st.session_state.conn, val_db)
                     if len(schemas) >= 2:
                         val_source = st.selectbox("Source Schema", schemas, key="schema_source")
                         val_target = st.selectbox("Target Schema", schemas, index=1, key="schema_target")
-                        
                         if st.button("Execute DriftWatch", type="primary", use_container_width=True):
                             with st.spinner("Validating..."):
                                 table_diff = compare_table_differences(st.session_state.conn, val_db, val_source, val_target)
                                 col_diff, type_diff = compare_column_differences(st.session_state.conn, val_db, val_source, val_target)
-                                
                                 st.session_state.table_diff = table_diff
                                 st.session_state.col_diff = col_diff
                                 st.session_state.type_diff = type_diff
                                 st.success("✅ Validation completed!")
                     else:
                         st.warning("Need at least 2 schemas")
-            
             with col2:
                 st.subheader("📊 Results")
-                
                 sub_tab1, sub_tab2, sub_tab3 = st.tabs(["Tables", "Columns", "Data Types"])
-                
                 with sub_tab1:
                     if 'table_diff' in st.session_state and not st.session_state.table_diff.empty:
                         st.dataframe(st.session_state.table_diff, use_container_width=True)
-                        csv = st.session_state.table_diff.to_csv(index=False)
-                        st.download_button("📥 Download", csv, f"table_diff_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
-                    else:
-                        st.info("No differences found")
-                
+                        st.download_button("📥 Download", st.session_state.table_diff.to_csv(index=False), f"table_diff_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                    else: st.info("No differences found")
                 with sub_tab2:
                     if 'col_diff' in st.session_state and not st.session_state.col_diff.empty:
                         st.dataframe(st.session_state.col_diff, use_container_width=True)
-                        csv = st.session_state.col_diff.to_csv(index=False)
-                        st.download_button("📥 Download", csv, f"col_diff_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
-                    else:
-                        st.info("No differences found")
-                
+                        st.download_button("📥 Download", st.session_state.col_diff.to_csv(index=False), f"col_diff_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                    else: st.info("No differences found")
                 with sub_tab3:
                     if 'type_diff' in st.session_state and not st.session_state.type_diff.empty:
                         st.dataframe(st.session_state.type_diff, use_container_width=True)
-                        csv = st.session_state.type_diff.to_csv(index=False)
-                        st.download_button("📥 Download", csv, f"type_diff_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
-                    else:
-                        st.info("No differences found")
-        
-        # === KPI VALIDATION ===
+                        st.download_button("📥 Download", st.session_state.type_diff.to_csv(index=False), f"type_diff_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                    else: st.info("No differences found")
+
         elif validation_type == "KPI Validation":
             col1, col2 = st.columns([1, 2])
-            
             with col1:
                 st.subheader("📋 Configuration")
                 databases = get_databases(st.session_state.conn)
                 kpi_db = st.selectbox("Database", databases, key="kpi_db")
-                
                 if kpi_db:
                     schemas = get_schemas(st.session_state.conn, kpi_db)
                     if len(schemas) >= 2:
                         kpi_source = st.selectbox("Source Schema", schemas, key="kpi_source")
                         kpi_target = st.selectbox("Target Schema", schemas, index=1, key="kpi_target")
-                        
                         if st.button("Execute DriftWatch", type="primary", use_container_width=True):
                             with st.spinner("Validating KPIs..."):
                                 df, msg = validate_kpis(st.session_state.conn, kpi_db, kpi_source, kpi_target)
                                 st.session_state.kpi_results = df
-                                
-                                if not df.empty:
-                                    st.success(msg)
-                                else:
-                                    st.warning(msg)
-                    else:
-                        st.warning("Need at least 2 schemas")
-            
+                                if not df.empty: st.success(msg)
+                                else: st.warning(msg)
+                    else: st.warning("Need at least 2 schemas")
             with col2:
                 st.subheader("📊 Results")
                 if 'kpi_results' in st.session_state and not st.session_state.kpi_results.empty:
                     st.dataframe(st.session_state.kpi_results, use_container_width=True)
-                    csv = st.session_state.kpi_results.to_csv(index=False)
-                    st.download_button("📥 Download", csv, f"kpi_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
-                else:
-                    st.info("Run validation to see results")
-        
-        # === TEST CASE VALIDATION ===
+                    st.download_button("📥 Download", st.session_state.kpi_results.to_csv(index=False), f"kpi_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                else: st.info("Run validation to see results")
+
         elif validation_type == "Test Case Validation":
             col1, col2 = st.columns([1, 2])
-            
             with col1:
                 st.subheader("📋 Configuration")
                 databases = get_databases(st.session_state.conn)
                 tc_db = st.selectbox("Database", databases, key="tc_db")
-                
                 if tc_db:
                     schemas = get_schemas(st.session_state.conn, tc_db)
                     tc_schema = st.selectbox("Schema", schemas, key="tc_schema")
-                    
                     if tc_schema:
                         tables = get_test_case_tables(st.session_state.conn, tc_db, tc_schema)
                         tc_table = st.selectbox("Category", tables, key="tc_table")
-                        
                         test_cases = get_test_cases(st.session_state.conn, tc_db, tc_schema, tc_table)
-                        
                         if test_cases:
                             st.subheader("Select Test Cases")
                             test_names = [f"{case[1]}" for case in test_cases]
-                            
                             select_all = st.checkbox("Select All", value=True, key="tc_select_all")
-                            
                             if select_all:
-                                selected = st.multiselect(
-                                    "Test Cases",
-                                    test_names,
-                                    default=test_names,
-                                    key="tc_selected"
-                                )
+                                selected = st.multiselect("Test Cases", test_names, default=test_names, key="tc_selected")
                             else:
-                                selected = st.multiselect(
-                                    "Test Cases",
-                                    test_names,
-                                    key="tc_selected_manual"
-                                )
-                            
+                                selected = st.multiselect("Test Cases", test_names, key="tc_selected_manual")
                             if st.button("Execute DriftWatch", type="primary", use_container_width=True):
                                 if selected:
                                     with st.spinner("Running tests..."):
                                         selected_cases = [case for case in test_cases if case[1] in selected]
-                                        df, msg = validate_test_cases(
-                                            st.session_state.conn, tc_db, tc_schema, selected_cases
-                                        )
+                                        df, msg = validate_test_cases(st.session_state.conn, tc_db, tc_schema, selected_cases)
                                         st.session_state.test_results = df
-                                        
-                                        if not df.empty:
-                                            st.success(msg)
-                                        else:
-                                            st.warning(msg)
+                                        if not df.empty: st.success(msg)
+                                        else: st.warning(msg)
                                 else:
                                     st.warning("Select at least one test case")
-                        else:
-                            st.warning("No test cases found")
-            
+                        else: st.warning("No test cases found")
             with col2:
                 st.subheader("📊 Results")
                 if 'test_results' in st.session_state and not st.session_state.test_results.empty:
                     st.dataframe(st.session_state.test_results, use_container_width=True)
-                    
                     pass_count = len(st.session_state.test_results[st.session_state.test_results['Status'].str.contains('PASS')])
                     fail_count = len(st.session_state.test_results[st.session_state.test_results['Status'].str.contains('FAIL')])
                     error_count = len(st.session_state.test_results[st.session_state.test_results['Status'].str.contains('ERROR')])
-                    
                     col_a, col_b, col_c = st.columns(3)
                     col_a.metric("✅ Passed", pass_count)
                     col_b.metric("❌ Failed", fail_count)
                     col_c.metric("⚠️ Errors", error_count)
-                    
-                    csv = st.session_state.test_results.to_csv(index=False)
-                    st.download_button(
-                        "📥 Download",
-                        csv,
-                        f"test_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                    )
-                else:
-                    st.info("Run validation to see results")
-        
-        # === DATA QUALITY VALIDATION ===
+                    st.download_button("📥 Download", st.session_state.test_results.to_csv(index=False), f"test_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                else: st.info("Run validation to see results")
+
         elif validation_type == "Data Quality Validation":
             col1, col2 = st.columns([1, 2])
-            
             with col1:
                 st.subheader("📋 Configuration")
                 databases = get_databases(st.session_state.conn)
                 dq_db = st.selectbox("Database", databases, key="dq_db")
-                
                 if dq_db:
                     schemas = get_schemas(st.session_state.conn, dq_db)
                     dq_schema = st.selectbox("Schema", schemas, key="dq_schema")
-                    
                     if dq_schema:
                         tables = get_tables(st.session_state.conn, dq_db, dq_schema)
                         dq_table = st.selectbox("Table", tables, key="dq_table")
-                        
                         if dq_table:
                             st.subheader("Quality Checks")
-                            
                             dq_row_count = st.checkbox("Row Count Check", value=True, key="dq_row")
-                            if dq_row_count:
-                                dq_min_rows = st.number_input("Minimum Rows", value=1, min_value=0, key="dq_min")
-                            else:
-                                dq_min_rows = 1
-                            
+                            dq_min_rows = st.number_input("Minimum Rows", value=1, min_value=0, key="dq_min") if dq_row_count else 1
                             dq_duplicates = st.checkbox("Duplicate Rows Check", value=True, key="dq_dup")
-                            
                             st.markdown("<br>", unsafe_allow_html=True)
-                            
                             if st.button("Run Quality Checks", type="primary", use_container_width=True):
                                 with st.spinner("Running checks..."):
                                     validator = DataQualityValidator(st.session_state.conn)
-                                    summary, details, score = validator.run_checks(
-                                        dq_db, dq_schema, dq_table,
-                                        dq_row_count, dq_min_rows, dq_duplicates
-                                    )
-                                    
+                                    summary, details, score = validator.run_checks(dq_db, dq_schema, dq_table, dq_row_count, dq_min_rows, dq_duplicates)
                                     st.session_state.dq_summary = summary
                                     st.session_state.dq_details = details
                                     st.session_state.dq_score = score
                                     st.success("✅ Quality checks completed!")
-            
             with col2:
                 st.subheader("📊 Results")
-                
                 if 'dq_score' in st.session_state:
                     score = st.session_state.dq_score
-                    
-                    if score >= 80:
-                        score_class = "passed-score"
-                    elif score >= 50:
-                        score_class = "warning-score"
-                    else:
-                        score_class = "failed-score"
-                    
-                    st.markdown(
-                        f'<div class="score-box {score_class}">Quality Score: {score:.0f}/100</div>',
-                        unsafe_allow_html=True
-                    )
-                
+                    score_class = "passed-score" if score >= 80 else ("warning-score" if score >= 50 else "failed-score")
+                    st.markdown(f'<div class="score-box {score_class}">Quality Score: {score:.0f}/100</div>', unsafe_allow_html=True)
                 sub_tab1, sub_tab2 = st.tabs(["Summary", "Details"])
-                
                 with sub_tab1:
                     if 'dq_summary' in st.session_state and not st.session_state.dq_summary.empty:
                         st.dataframe(st.session_state.dq_summary, use_container_width=True)
-                    else:
-                        st.info("Run checks to see summary")
-                
+                    else: st.info("Run checks to see summary")
                 with sub_tab2:
                     if 'dq_details' in st.session_state and not st.session_state.dq_details.empty:
                         st.dataframe(st.session_state.dq_details, use_container_width=True)
-                        
-                        csv = st.session_state.dq_details.to_csv(index=False)
-                        st.download_button(
-                            "📥 Download Report",
-                            csv,
-                            f"dq_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                        )
-                    else:
-                        st.info("Run checks to see details")
+                        st.download_button("📥 Download Report", st.session_state.dq_details.to_csv(index=False), f"dq_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+                    else: st.info("Run checks to see details")
 
-    # ===== PERFORMANCE MONITORING (NEW TAB) =====
+    # ===== PERFORMANCE MONITORING (NEW TAB - FIXED) =====
     with tab3:
         st.header("📊 Performance Monitoring & Cost Analysis")
-        st.markdown("Monitor query performance, warehouse costs, storage, user activity, and more.")
 
-        # ---- Shared Filters ----
+        # ---- Global Filters (resolve dates BEFORE columns to avoid scoping bugs) ----
         with st.expander("🔧 Global Filters", expanded=True):
-            fcol1, fcol2, fcol3, fcol4 = st.columns(4)
+            fcol1, fcol2 = st.columns(2)
             with fcol1:
                 time_range_opt = st.selectbox(
                     "Time Range",
-                    ["Last 24 hours", "Last 7 days", "Last 30 days", "Custom"],
+                    ["Last 7 days", "Last 24 hours", "Last 30 days", "Custom"],
                     key="perf_time_range"
                 )
             with fcol2:
+                # Resolve default dates first so they're always available
+                _default_start, _default_end = get_date_range(time_range_opt)
                 if time_range_opt == "Custom":
-                    perf_start = st.text_input("Start Date (YYYY-MM-DD)", value=(datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d"), key="perf_start")
+                    perf_start = st.text_input("Start Date (YYYY-MM-DD)", value=_default_start, key="perf_start_custom")
+                    perf_end = st.text_input("End Date (YYYY-MM-DD)", value=_default_end, key="perf_end_custom")
                 else:
-                    perf_start, perf_end = get_date_range(time_range_opt)
-                    st.text_input("Start Date", value=perf_start, disabled=True, key="perf_start_display")
+                    perf_start = _default_start
+                    perf_end = _default_end
+                    st.info(f"📅 {perf_start}  →  {perf_end}")
+
+            fcol3, fcol4, fcol5, fcol6 = st.columns(4)
             with fcol3:
-                if time_range_opt == "Custom":
-                    perf_end = st.text_input("End Date (YYYY-MM-DD)", value=datetime.now().strftime("%Y-%m-%d"), key="perf_end")
-                else:
-                    st.text_input("End Date", value=perf_end, disabled=True, key="perf_end_display")
-            with fcol4:
                 perf_warehouses = get_all_warehouses(st.session_state.conn)
                 perf_warehouse = st.selectbox("Warehouse", perf_warehouses, key="perf_warehouse")
-
-            fcol5, fcol6, fcol7, fcol8 = st.columns(4)
-            with fcol5:
+            with fcol4:
                 perf_dbs = ["All"] + get_databases(st.session_state.conn)
                 perf_db = st.selectbox("Database", perf_dbs, key="perf_db")
-            with fcol6:
-                if perf_db and perf_db != "All":
-                    perf_schemas_list = ["All"] + get_schemas(st.session_state.conn, perf_db)
-                else:
-                    perf_schemas_list = ["All"]
+            with fcol5:
+                perf_schemas_list = ["All"] + (get_schemas(st.session_state.conn, perf_db) if perf_db != "All" else [])
                 perf_schema = st.selectbox("Schema", perf_schemas_list, key="perf_schema")
-            with fcol7:
+            with fcol6:
                 perf_users = get_all_users(st.session_state.conn)
                 perf_user = st.selectbox("User", perf_users, key="perf_user")
-            with fcol8:
-                perf_query_type = st.selectbox(
-                    "Query Type",
-                    ["All", "SELECT", "INSERT", "UPDATE", "DELETE", "MERGE"],
-                    key="perf_query_type"
-                )
 
-        # ---- Sub-tabs for Performance Monitoring ----
+            perf_query_type = st.selectbox(
+                "Query Type", ["All", "SELECT", "INSERT", "UPDATE", "DELETE", "MERGE"],
+                key="perf_query_type"
+            )
+
+        # ---- Sub-tabs ----
         perf_tab1, perf_tab2, perf_tab3, perf_tab4, perf_tab5 = st.tabs([
-            "👤 User Adoption",
-            "⚡ Query Performance",
-            "💰 Compute Cost",
-            "🗄️ Storage",
-            "🏭 Warehouse Activity"
+            "👤 User Adoption", "⚡ Query Performance",
+            "💰 Compute Cost", "🗄️ Storage", "🏭 Warehouse Activity"
         ])
 
         # ---- USER ADOPTION ----
         with perf_tab1:
             st.subheader("👤 User Adoption")
             if st.button("🔄 Load User Adoption Data", key="load_ua", type="primary"):
-                with st.spinner("Loading user adoption data..."):
+                with st.spinner("Loading..."):
+                    errors = []
                     try:
-                        ua_top_users = fetch_top_active_users(
+                        st.session_state.ua_top_users = fetch_top_active_users(
                             st.session_state.conn, perf_start, perf_end,
                             perf_db, perf_schema, perf_query_type
                         )
-                        ua_over_time = fetch_active_users_over_time(
+                    except Exception as e:
+                        errors.append(f"Top Users: {str(e)}")
+                        st.session_state.ua_top_users = pd.DataFrame()
+
+                    try:
+                        st.session_state.ua_over_time = fetch_active_users_over_time(
                             st.session_state.conn, perf_start, perf_end,
                             perf_db, perf_schema, perf_warehouse, perf_user, perf_query_type
                         )
-                        st.session_state.ua_top_users = ua_top_users
-                        st.session_state.ua_over_time = ua_over_time
-                        st.success("✅ Data loaded!")
                     except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
+                        errors.append(f"Users Over Time: {str(e)}")
+                        st.session_state.ua_over_time = pd.DataFrame()
+
+                    try:
+                        st.session_state.ua_queries_per_user = fetch_queries_per_user(
+                            st.session_state.conn, perf_start, perf_end,
+                            perf_db, perf_schema, perf_warehouse, perf_user
+                        )
+                    except Exception as e:
+                        errors.append(f"Queries Per User: {str(e)}")
+                        st.session_state.ua_queries_per_user = pd.DataFrame()
+
+                    if errors:
+                        for err in errors:
+                            st.error(f"❌ {err}")
+                    else:
+                        st.success("✅ Data loaded!")
 
             ua_col1, ua_col2 = st.columns(2)
-
             with ua_col1:
-                st.markdown("#### Top 10 Active Users")
+                st.markdown("#### 🏆 Top Active Users")
                 if 'ua_top_users' in st.session_state and not st.session_state.ua_top_users.empty:
                     st.dataframe(st.session_state.ua_top_users, use_container_width=True)
-                    csv = st.session_state.ua_top_users.to_csv(index=False)
-                    st.download_button("📥 Download", csv, f"top_users_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_ua_users")
+                    st.download_button("📥 Download", st.session_state.ua_top_users.to_csv(index=False),
+                                       f"top_users_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_ua_users")
                     if MATPLOTLIB_AVAILABLE:
-                        fig, ax = plt.subplots(figsize=(8, 4))
-                        df_plot = st.session_state.ua_top_users.copy()
-                        if "Query Count" in df_plot.columns and "User" in df_plot.columns:
-                            df_plot = df_plot.sort_values("Query Count", ascending=True).tail(10)
-                            ax.barh(df_plot["User"], pd.to_numeric(df_plot["Query Count"], errors='coerce').fillna(0), color='steelblue')
+                        df_p = st.session_state.ua_top_users.copy()
+                        if "Query Count" in df_p.columns and "User" in df_p.columns:
+                            fig, ax = plt.subplots(figsize=(8, 4))
+                            df_p["Query Count"] = pd.to_numeric(df_p["Query Count"], errors='coerce').fillna(0)
+                            df_p = df_p.nlargest(10, "Query Count").sort_values("Query Count")
+                            ax.barh(df_p["User"].astype(str), df_p["Query Count"], color='steelblue')
                             ax.set_xlabel("Query Count")
                             ax.set_title("Top Users by Query Count")
                             plt.tight_layout()
-                            st.pyplot(fig)
-                            plt.close()
+                            st.pyplot(fig); plt.close()
                 else:
                     st.info("Click 'Load User Adoption Data' to see results.")
 
             with ua_col2:
-                st.markdown("#### Active Users Over Time")
+                st.markdown("#### 📈 Active Users Over Time")
                 if 'ua_over_time' in st.session_state and not st.session_state.ua_over_time.empty:
                     st.dataframe(st.session_state.ua_over_time, use_container_width=True)
-                    csv = st.session_state.ua_over_time.to_csv(index=False)
-                    st.download_button("📥 Download", csv, f"users_over_time_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_ua_time")
+                    st.download_button("📥 Download", st.session_state.ua_over_time.to_csv(index=False),
+                                       f"users_over_time_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_ua_time")
                     if MATPLOTLIB_AVAILABLE:
-                        fig, ax = plt.subplots(figsize=(8, 4))
-                        df_plot = st.session_state.ua_over_time.copy()
-                        if "Date" in df_plot.columns and "Active Users" in df_plot.columns:
-                            df_plot["Date"] = pd.to_datetime(df_plot["Date"])
-                            df_plot["Active Users"] = pd.to_numeric(df_plot["Active Users"], errors='coerce').fillna(0)
-                            df_plot = df_plot.sort_values("Date")
-                            ax.plot(df_plot["Date"], df_plot["Active Users"], marker='o', color='purple')
-                            ax.set_xlabel("Date")
-                            ax.set_ylabel("Active Users")
+                        df_p = st.session_state.ua_over_time.copy()
+                        if "Date" in df_p.columns and "Active Users" in df_p.columns:
+                            fig, ax = plt.subplots(figsize=(8, 4))
+                            df_p["Date"] = pd.to_datetime(df_p["Date"])
+                            df_p["Active Users"] = pd.to_numeric(df_p["Active Users"], errors='coerce').fillna(0)
+                            df_p = df_p.sort_values("Date")
+                            ax.plot(df_p["Date"], df_p["Active Users"], marker='o', color='purple', linewidth=2)
+                            ax.set_xlabel("Date"); ax.set_ylabel("Active Users")
                             ax.set_title("Active Users Over Time")
-                            ax.grid(True)
-                            plt.xticks(rotation=45)
-                            plt.tight_layout()
-                            st.pyplot(fig)
-                            plt.close()
+                            ax.grid(True, alpha=0.3)
+                            plt.xticks(rotation=45); plt.tight_layout()
+                            st.pyplot(fig); plt.close()
                 else:
                     st.info("Click 'Load User Adoption Data' to see results.")
+
+            if 'ua_queries_per_user' in st.session_state and not st.session_state.ua_queries_per_user.empty:
+                st.markdown("#### 📊 Queries Per User")
+                st.dataframe(st.session_state.ua_queries_per_user, use_container_width=True)
 
         # ---- QUERY PERFORMANCE ----
         with perf_tab2:
             st.subheader("⚡ Query Performance")
             if st.button("🔄 Load Query Performance Data", key="load_qp", type="primary"):
-                with st.spinner("Loading query performance data..."):
-                    try:
-                        qp_longest = fetch_longest_running_queries(
-                            st.session_state.conn, perf_start, perf_end,
-                            perf_db, perf_schema, perf_warehouse, perf_user, perf_query_type
-                        )
-                        qp_expensive = fetch_expensive_queries(
-                            st.session_state.conn, perf_start, perf_end,
-                            perf_db, perf_schema, perf_warehouse, perf_user, perf_query_type
-                        )
-                        qp_frequent = fetch_top_frequent_queries(
-                            st.session_state.conn, perf_start, perf_end,
-                            perf_db, perf_schema, perf_warehouse, perf_user, perf_query_type
-                        )
-                        qp_failed = fetch_failed_queries(
-                            st.session_state.conn, perf_start, perf_end,
-                            perf_db, perf_schema, perf_warehouse, perf_user
-                        )
-                        st.session_state.qp_longest = qp_longest
-                        st.session_state.qp_expensive = qp_expensive
-                        st.session_state.qp_frequent = qp_frequent
-                        st.session_state.qp_failed = qp_failed
+                with st.spinner("Loading..."):
+                    errors = []
+                    for fetch_fn, key, label in [
+                        (lambda: fetch_longest_running_queries(st.session_state.conn, perf_start, perf_end, perf_db, perf_schema, perf_warehouse, perf_user, perf_query_type), "qp_longest", "Longest Running"),
+                        (lambda: fetch_expensive_queries(st.session_state.conn, perf_start, perf_end, perf_db, perf_schema, perf_warehouse, perf_user, perf_query_type), "qp_expensive", "Most Expensive"),
+                        (lambda: fetch_top_frequent_queries(st.session_state.conn, perf_start, perf_end, perf_db, perf_schema, perf_warehouse, perf_user, perf_query_type), "qp_frequent", "Most Frequent"),
+                        (lambda: fetch_failed_queries(st.session_state.conn, perf_start, perf_end, perf_db, perf_schema, perf_warehouse, perf_user), "qp_failed", "Failed Queries"),
+                        (lambda: fetch_query_profile_summary(st.session_state.conn, perf_start, perf_end, perf_db, perf_schema, perf_warehouse, perf_user, perf_query_type), "qp_profile", "Query Profile"),
+                    ]:
+                        try:
+                            st.session_state[key] = fetch_fn()
+                        except Exception as e:
+                            errors.append(f"{label}: {str(e)}")
+                            st.session_state[key] = pd.DataFrame()
+                    if errors:
+                        for err in errors: st.error(f"❌ {err}")
+                    else:
                         st.success("✅ Data loaded!")
-                    except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
 
-            qp_sub1, qp_sub2, qp_sub3, qp_sub4 = st.tabs([
-                "Longest Running", "Most Expensive", "Most Frequent", "Failed Queries"
+            qp_sub1, qp_sub2, qp_sub3, qp_sub4, qp_sub5 = st.tabs([
+                "⏱ Longest Running", "💸 Most Expensive", "🔁 Most Frequent", "❌ Failed", "🔍 Query Profile"
             ])
 
+            def _show_qp_tab(state_key, chart_x, chart_y, chart_color, chart_title, dl_key):
+                if state_key in st.session_state and not st.session_state[state_key].empty:
+                    st.dataframe(st.session_state[state_key], use_container_width=True)
+                    st.download_button("📥 Download", st.session_state[state_key].to_csv(index=False),
+                                       f"{state_key}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key=dl_key)
+                    if MATPLOTLIB_AVAILABLE and chart_x and chart_y:
+                        df_p = st.session_state[state_key].copy()
+                        if chart_x in df_p.columns and chart_y in df_p.columns:
+                            fig, ax = plt.subplots(figsize=(10, 4))
+                            df_p[chart_y] = pd.to_numeric(df_p[chart_y], errors='coerce').fillna(0)
+                            df_p = df_p.sort_values(chart_y).tail(10)
+                            ax.barh(df_p[chart_x].astype(str), df_p[chart_y], color=chart_color)
+                            ax.set_xlabel(chart_y); ax.set_title(chart_title)
+                            plt.tight_layout(); st.pyplot(fig); plt.close()
+                else:
+                    st.info("Click 'Load Query Performance Data' to see results.")
+
             with qp_sub1:
-                if 'qp_longest' in st.session_state and not st.session_state.qp_longest.empty:
-                    st.dataframe(st.session_state.qp_longest, use_container_width=True)
-                    csv = st.session_state.qp_longest.to_csv(index=False)
-                    st.download_button("📥 Download", csv, f"longest_queries_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_qp_long")
-                    if MATPLOTLIB_AVAILABLE:
-                        df_plot = st.session_state.qp_longest.copy()
-                        if "Query ID" in df_plot.columns and "Exec Time (s)" in df_plot.columns:
-                            fig, ax = plt.subplots(figsize=(10, 5))
-                            df_plot = df_plot.sort_values("Exec Time (s)", ascending=True).tail(10)
-                            ax.barh(df_plot["Query ID"].astype(str), pd.to_numeric(df_plot["Exec Time (s)"], errors='coerce').fillna(0), color='tomato')
-                            ax.set_xlabel("Execution Time (s)")
-                            ax.set_title("Top 10 Longest Running Queries")
-                            plt.tight_layout()
-                            st.pyplot(fig)
-                            plt.close()
-                else:
-                    st.info("Click 'Load Query Performance Data' to see results.")
-
+                _show_qp_tab("qp_longest", "Query ID", "Exec Time (s)", "tomato", "Top 10 Longest Running Queries", "dl_qp_long")
             with qp_sub2:
-                if 'qp_expensive' in st.session_state and not st.session_state.qp_expensive.empty:
-                    st.dataframe(st.session_state.qp_expensive, use_container_width=True)
-                    csv = st.session_state.qp_expensive.to_csv(index=False)
-                    st.download_button("📥 Download", csv, f"expensive_queries_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_qp_exp")
-                    if MATPLOTLIB_AVAILABLE:
-                        df_plot = st.session_state.qp_expensive.copy()
-                        if "Query ID" in df_plot.columns and "Credits Consumed" in df_plot.columns:
-                            fig, ax = plt.subplots(figsize=(10, 5))
-                            df_plot = df_plot.sort_values("Credits Consumed", ascending=True).tail(10)
-                            ax.barh(df_plot["Query ID"].astype(str), pd.to_numeric(df_plot["Credits Consumed"], errors='coerce').fillna(0), color='salmon')
-                            ax.set_xlabel("Credits Consumed")
-                            ax.set_title("Top 10 Expensive Queries")
-                            plt.tight_layout()
-                            st.pyplot(fig)
-                            plt.close()
-                else:
-                    st.info("Click 'Load Query Performance Data' to see results.")
-
+                _show_qp_tab("qp_expensive", "Query ID", "Bytes Scanned", "salmon", "Top 10 Queries by Bytes Scanned", "dl_qp_exp")
             with qp_sub3:
-                if 'qp_frequent' in st.session_state and not st.session_state.qp_frequent.empty:
-                    st.dataframe(st.session_state.qp_frequent, use_container_width=True)
-                    csv = st.session_state.qp_frequent.to_csv(index=False)
-                    st.download_button("📥 Download", csv, f"frequent_queries_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_qp_freq")
-                else:
-                    st.info("Click 'Load Query Performance Data' to see results.")
-
+                _show_qp_tab("qp_frequent", "Query Preview", "Execution Count", "cornflowerblue", "Top 10 Most Frequent Queries", "dl_qp_freq")
             with qp_sub4:
                 if 'qp_failed' in st.session_state and not st.session_state.qp_failed.empty:
-                    st.dataframe(st.session_state.qp_failed, use_container_width=True)
-                    csv = st.session_state.qp_failed.to_csv(index=False)
-                    st.download_button("📥 Download", csv, f"failed_queries_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_qp_fail")
                     st.metric("Total Failed Queries", len(st.session_state.qp_failed))
+                    st.dataframe(st.session_state.qp_failed, use_container_width=True)
+                    st.download_button("📥 Download", st.session_state.qp_failed.to_csv(index=False),
+                                       f"failed_queries_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_qp_fail")
+                else:
+                    st.info("Click 'Load Query Performance Data' to see results.")
+            with qp_sub5:
+                if 'qp_profile' in st.session_state and not st.session_state.qp_profile.empty:
+                    st.dataframe(st.session_state.qp_profile, use_container_width=True)
+                    st.download_button("📥 Download", st.session_state.qp_profile.to_csv(index=False),
+                                       f"query_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_qp_prof")
                 else:
                     st.info("Click 'Load Query Performance Data' to see results.")
 
@@ -1339,99 +1124,99 @@ def show_main_app():
         with perf_tab3:
             st.subheader("💰 Compute Cost Analysis")
             if st.button("🔄 Load Cost Data", key="load_cc", type="primary"):
-                with st.spinner("Loading cost data..."):
+                with st.spinner("Loading..."):
+                    errors = []
                     try:
-                        cc_credits = fetch_warehouse_credits(
-                            st.session_state.conn, perf_start, perf_end, perf_warehouse
-                        )
-                        cc_over_time, cc_date_col = fetch_credit_usage_over_time(
-                            st.session_state.conn, perf_start, perf_end, perf_warehouse
-                        )
-                        cc_heatmap = fetch_cost_heatmap_data(
-                            st.session_state.conn, perf_start, perf_end, perf_warehouse
-                        )
-                        st.session_state.cc_credits = cc_credits
-                        st.session_state.cc_over_time = cc_over_time
-                        st.session_state.cc_date_col = cc_date_col
-                        st.session_state.cc_heatmap = cc_heatmap
-                        st.success("✅ Data loaded!")
+                        st.session_state.cc_credits = fetch_warehouse_credits(st.session_state.conn, perf_start, perf_end, perf_warehouse)
                     except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
+                        errors.append(f"Warehouse Credits: {str(e)}")
+                        st.session_state.cc_credits = pd.DataFrame()
+                    try:
+                        result, date_col = fetch_credit_usage_over_time(st.session_state.conn, perf_start, perf_end, perf_warehouse)
+                        st.session_state.cc_over_time = result
+                        st.session_state.cc_date_col = date_col
+                    except Exception as e:
+                        errors.append(f"Credit Usage Over Time: {str(e)}")
+                        st.session_state.cc_over_time = pd.DataFrame()
+                        st.session_state.cc_date_col = "Date"
+                    try:
+                        st.session_state.cc_heatmap = fetch_cost_heatmap_data(st.session_state.conn, perf_start, perf_end, perf_warehouse)
+                    except Exception as e:
+                        errors.append(f"Cost Heatmap: {str(e)}")
+                        st.session_state.cc_heatmap = pd.DataFrame()
+                    if errors:
+                        for err in errors: st.error(f"❌ {err}")
+                    else:
+                        st.success("✅ Data loaded!")
 
+            # KPI summary cards
             if 'cc_credits' in st.session_state and not st.session_state.cc_credits.empty:
-                # KPI Summary
-                total_credits = pd.to_numeric(st.session_state.cc_credits.get("Credits Used", pd.Series()), errors='coerce').sum()
-                st.markdown(f"""
-                <div class="kpi-card">
-                    <strong>Total Credits Used:</strong> {total_credits:,.2f} &nbsp;&nbsp;
-                    <strong>Estimated Cost (@ $3/credit):</strong> ${total_credits * 3:,.2f}
-                </div>
-                """, unsafe_allow_html=True)
+                total_creds = pd.to_numeric(st.session_state.cc_credits.get("Credits Used", pd.Series(dtype=float)), errors='coerce').sum()
+                kc1, kc2, kc3 = st.columns(3)
+                kc1.metric("Total Credits Used", f"{total_creds:,.2f}")
+                kc2.metric("Est. Cost (@ $3/credit)", f"${total_creds * 3:,.2f}")
+                kc3.metric("Warehouses", st.session_state.cc_credits["Warehouse"].nunique() if "Warehouse" in st.session_state.cc_credits.columns else "N/A")
 
-            cc_sub1, cc_sub2, cc_sub3 = st.tabs(["Credit Usage Over Time", "Warehouse Breakdown", "Cost Heatmap"])
+            cc_sub1, cc_sub2, cc_sub3 = st.tabs(["📈 Credit Usage Over Time", "🏭 Warehouse Breakdown", "🌡️ Cost Heatmap"])
 
             with cc_sub1:
                 if 'cc_over_time' in st.session_state and not st.session_state.cc_over_time.empty:
                     st.dataframe(st.session_state.cc_over_time, use_container_width=True)
-                    csv = st.session_state.cc_over_time.to_csv(index=False)
-                    st.download_button("📥 Download", csv, f"credit_usage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_cc_time")
+                    st.download_button("📥 Download", st.session_state.cc_over_time.to_csv(index=False),
+                                       f"credit_usage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_cc_time")
                     if MATPLOTLIB_AVAILABLE:
-                        df_plot = st.session_state.cc_over_time.copy()
-                        date_col = st.session_state.cc_date_col
-                        if date_col in df_plot.columns and "Credits Used" in df_plot.columns:
+                        df_p = st.session_state.cc_over_time.copy()
+                        date_col = st.session_state.get("cc_date_col", "Date")
+                        if date_col in df_p.columns and "Credits Used" in df_p.columns:
                             fig, ax = plt.subplots(figsize=(10, 4))
-                            credits_vals = pd.to_numeric(df_plot["Credits Used"], errors='coerce').fillna(0)
-                            ax.fill_between(range(len(df_plot)), credits_vals, color='lightgreen', alpha=0.7)
-                            ax.plot(range(len(df_plot)), credits_vals, color='darkgreen', marker='o')
-                            ax.set_xticks(range(len(df_plot)))
-                            ax.set_xticklabels(df_plot[date_col].astype(str), rotation=45, ha='right')
+                            vals = pd.to_numeric(df_p["Credits Used"], errors='coerce').fillna(0)
+                            x = range(len(df_p))
+                            ax.fill_between(x, vals, color='lightgreen', alpha=0.7)
+                            ax.plot(x, vals, color='darkgreen', marker='o', linewidth=2)
+                            ax.set_xticks(list(x))
+                            ax.set_xticklabels(df_p[date_col].astype(str), rotation=45, ha='right')
                             ax.set_ylabel("Credits Used")
-                            ax.set_title(f"Credit Usage Over Time ({date_col})")
-                            ax.grid(True, alpha=0.3)
-                            plt.tight_layout()
-                            st.pyplot(fig)
-                            plt.close()
+                            ax.set_title(f"Credit Usage ({date_col}-level)")
+                            ax.grid(True, alpha=0.3); plt.tight_layout()
+                            st.pyplot(fig); plt.close()
                 else:
                     st.info("Click 'Load Cost Data' to see results.")
 
             with cc_sub2:
                 if 'cc_credits' in st.session_state and not st.session_state.cc_credits.empty:
                     st.dataframe(st.session_state.cc_credits, use_container_width=True)
-                    csv = st.session_state.cc_credits.to_csv(index=False)
-                    st.download_button("📥 Download", csv, f"warehouse_credits_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_cc_wh")
+                    st.download_button("📥 Download", st.session_state.cc_credits.to_csv(index=False),
+                                       f"warehouse_credits_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_cc_wh")
                     if MATPLOTLIB_AVAILABLE:
-                        df_plot = st.session_state.cc_credits.copy()
-                        if "Warehouse" in df_plot.columns and "Compute Credits" in df_plot.columns:
+                        df_p = st.session_state.cc_credits.copy()
+                        compute_col = "Compute Credits"
+                        cloud_col = "Cloud Services Credits"
+                        if "Warehouse" in df_p.columns and compute_col in df_p.columns:
                             fig, ax = plt.subplots(figsize=(10, 5))
-                            wh_grp = df_plot.groupby("Warehouse")[["Compute Credits", "Cloud Services Credits"]].sum()
-                            wh_grp = wh_grp.apply(pd.to_numeric, errors='coerce').fillna(0)
-                            wh_grp.plot(kind='bar', stacked=True, ax=ax, cmap='coolwarm')
-                            ax.set_xlabel("Warehouse")
-                            ax.set_ylabel("Credits")
+                            grp = df_p.groupby("Warehouse")[[compute_col, cloud_col]].sum().apply(pd.to_numeric, errors='coerce').fillna(0)
+                            grp.plot(kind='bar', stacked=True, ax=ax, cmap='coolwarm')
+                            ax.set_xlabel("Warehouse"); ax.set_ylabel("Credits")
                             ax.set_title("Cost Breakdown by Warehouse")
-                            plt.xticks(rotation=45, ha='right')
-                            plt.tight_layout()
-                            st.pyplot(fig)
-                            plt.close()
+                            plt.xticks(rotation=45, ha='right'); plt.tight_layout()
+                            st.pyplot(fig); plt.close()
                 else:
                     st.info("Click 'Load Cost Data' to see results.")
 
             with cc_sub3:
-                if 'cc_heatmap' in st.session_state and not st.session_state.cc_heatmap.empty and MATPLOTLIB_AVAILABLE:
-                    df_heat = st.session_state.cc_heatmap.copy()
-                    if "DayOfWeek" in df_heat.columns and "HourOfDay" in df_heat.columns and "Credits" in df_heat.columns:
-                        df_heat["Credits"] = pd.to_numeric(df_heat["Credits"], errors='coerce').fillna(0)
-                        day_order = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                        pivot = df_heat.pivot_table(index='HourOfDay', columns='DayOfWeek', values='Credits', fill_value=0)
-                        pivot = pivot.reindex(columns=day_order, fill_value=0)
-                        fig, ax = plt.subplots(figsize=(12, 7))
-                        sns.heatmap(pivot, cmap="YlGnBu", annot=True, fmt=".1f", linewidths=.5, ax=ax)
-                        ax.set_title("Credits by Day of Week & Hour")
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                        plt.close()
-                    csv = st.session_state.cc_heatmap.to_csv(index=False)
-                    st.download_button("📥 Download Heatmap Data", csv, f"cost_heatmap_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_cc_heat")
+                if 'cc_heatmap' in st.session_state and not st.session_state.cc_heatmap.empty:
+                    if MATPLOTLIB_AVAILABLE:
+                        df_h = st.session_state.cc_heatmap.copy()
+                        if all(c in df_h.columns for c in ["DayOfWeek", "HourOfDay", "Credits"]):
+                            df_h["Credits"] = pd.to_numeric(df_h["Credits"], errors='coerce').fillna(0)
+                            day_order = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                            pivot = df_h.pivot_table(index='HourOfDay', columns='DayOfWeek', values='Credits', fill_value=0)
+                            pivot = pivot.reindex(columns=day_order, fill_value=0)
+                            fig, ax = plt.subplots(figsize=(12, 7))
+                            sns.heatmap(pivot, cmap="YlGnBu", annot=True, fmt=".1f", linewidths=0.5, ax=ax)
+                            ax.set_title("Credits Used by Day & Hour")
+                            plt.tight_layout(); st.pyplot(fig); plt.close()
+                    st.download_button("📥 Download Heatmap Data", st.session_state.cc_heatmap.to_csv(index=False),
+                                       f"cost_heatmap_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_cc_heat")
                 else:
                     st.info("Click 'Load Cost Data' to see results.")
 
@@ -1439,107 +1224,138 @@ def show_main_app():
         with perf_tab4:
             st.subheader("🗄️ Storage Analysis")
             if st.button("🔄 Load Storage Data", key="load_st", type="primary"):
-                with st.spinner("Loading storage data..."):
+                with st.spinner("Loading..."):
+                    errors = []
                     try:
-                        st_daily = fetch_daily_storage_usage(
-                            st.session_state.conn, perf_start, perf_end
-                        )
-                        st_tables = fetch_table_storage_metrics(
-                            st.session_state.conn, 
-                            perf_db if perf_db != "All" else None,
-                            perf_schema if perf_schema != "All" else None
-                        )
-                        st.session_state.st_daily = st_daily
-                        st.session_state.st_tables = st_tables
-                        st.success("✅ Data loaded!")
+                        st.session_state.st_daily = fetch_daily_storage_usage(st.session_state.conn, perf_start, perf_end)
                     except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
+                        errors.append(f"Daily Storage: {str(e)}")
+                        st.session_state.st_daily = pd.DataFrame()
+                    try:
+                        st.session_state.st_total = fetch_total_storage_over_time(st.session_state.conn)
+                    except Exception as e:
+                        errors.append(f"Total Storage: {str(e)}")
+                        st.session_state.st_total = pd.DataFrame()
+                    try:
+                        db_for_storage = perf_db if perf_db != "All" else None
+                        schema_for_storage = perf_schema if perf_schema != "All" else None
+                        st.session_state.st_tables = fetch_table_storage_metrics(st.session_state.conn, db_for_storage, schema_for_storage)
+                    except Exception as e:
+                        errors.append(f"Table Storage: {str(e)}")
+                        st.session_state.st_tables = pd.DataFrame()
+                    if errors:
+                        for err in errors: st.error(f"❌ {err}")
+                    else:
+                        st.success("✅ Data loaded!")
 
-            st_col1, st_col2 = st.columns(2)
+            st_sub1, st_sub2, st_sub3 = st.tabs(["📉 Daily DB Storage", "📦 Total Storage Over Time", "📋 Table Details"])
 
-            with st_col1:
-                st.markdown("#### Daily Storage Usage")
+            with st_sub1:
                 if 'st_daily' in st.session_state and not st.session_state.st_daily.empty:
+                    # KPIs
+                    avg_gb = pd.to_numeric(st.session_state.st_daily.get("Avg DB Storage (GB)", pd.Series(dtype=float)), errors='coerce').mean()
+                    max_gb = pd.to_numeric(st.session_state.st_daily.get("Avg DB Storage (GB)", pd.Series(dtype=float)), errors='coerce').max()
+                    sc1, sc2 = st.columns(2)
+                    sc1.metric("Avg Daily DB Storage", f"{avg_gb:.2f} GB")
+                    sc2.metric("Peak Daily DB Storage", f"{max_gb:.2f} GB")
                     st.dataframe(st.session_state.st_daily, use_container_width=True)
-                    csv = st.session_state.st_daily.to_csv(index=False)
-                    st.download_button("📥 Download", csv, f"daily_storage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_st_daily")
+                    st.download_button("📥 Download", st.session_state.st_daily.to_csv(index=False),
+                                       f"daily_storage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_st_daily")
                     if MATPLOTLIB_AVAILABLE:
-                        df_plot = st.session_state.st_daily.copy()
-                        if "Date" in df_plot.columns and "Avg DB Storage (GB)" in df_plot.columns:
-                            fig, ax = plt.subplots(figsize=(8, 4))
-                            df_plot["Date"] = pd.to_datetime(df_plot["Date"])
-                            df_plot["Avg DB Storage (GB)"] = pd.to_numeric(df_plot["Avg DB Storage (GB)"], errors='coerce').fillna(0)
-                            ax.plot(df_plot["Date"], df_plot["Avg DB Storage (GB)"], marker='o', color='teal')
-                            ax.set_xlabel("Date")
-                            ax.set_ylabel("Storage (GB)")
-                            ax.set_title("Avg Daily DB Storage (GB)")
-                            ax.grid(True)
-                            plt.xticks(rotation=45)
-                            plt.tight_layout()
-                            st.pyplot(fig)
-                            plt.close()
+                        df_p = st.session_state.st_daily.copy()
+                        if "Date" in df_p.columns and "Avg DB Storage (GB)" in df_p.columns:
+                            fig, ax = plt.subplots(figsize=(10, 4))
+                            df_p["Date"] = pd.to_datetime(df_p["Date"])
+                            df_p["Avg DB Storage (GB)"] = pd.to_numeric(df_p["Avg DB Storage (GB)"], errors='coerce').fillna(0)
+                            ax.plot(df_p["Date"], df_p["Avg DB Storage (GB)"], marker='o', color='teal', linewidth=2)
+                            ax.fill_between(df_p["Date"], df_p["Avg DB Storage (GB)"], alpha=0.2, color='teal')
+                            ax.set_xlabel("Date"); ax.set_ylabel("GB")
+                            ax.set_title("Average Daily DB Storage (GB)")
+                            ax.grid(True, alpha=0.3); plt.xticks(rotation=45); plt.tight_layout()
+                            st.pyplot(fig); plt.close()
                 else:
                     st.info("Click 'Load Storage Data' to see results.")
 
-            with st_col2:
-                st.markdown("#### Table Storage Details")
+            with st_sub2:
+                if 'st_total' in st.session_state and not st.session_state.st_total.empty:
+                    st.dataframe(st.session_state.st_total, use_container_width=True)
+                    st.download_button("📥 Download", st.session_state.st_total.to_csv(index=False),
+                                       f"total_storage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_st_total")
+                    if MATPLOTLIB_AVAILABLE:
+                        df_p = st.session_state.st_total.copy()
+                        if "Date" in df_p.columns and "Total Storage (GB)" in df_p.columns:
+                            fig, ax = plt.subplots(figsize=(10, 4))
+                            df_p["Date"] = pd.to_datetime(df_p["Date"])
+                            df_p["Total Storage (GB)"] = pd.to_numeric(df_p["Total Storage (GB)"], errors='coerce').fillna(0)
+                            df_p = df_p.sort_values("Date")
+                            ax.plot(df_p["Date"], df_p["Total Storage (GB)"], marker='o', color='royalblue', linewidth=2)
+                            ax.set_xlabel("Date"); ax.set_ylabel("GB")
+                            ax.set_title("Total Account Storage Over Time (GB)")
+                            ax.grid(True, alpha=0.3); plt.xticks(rotation=45); plt.tight_layout()
+                            st.pyplot(fig); plt.close()
+                else:
+                    st.info("Click 'Load Storage Data' to see results.")
+
+            with st_sub3:
                 if 'st_tables' in st.session_state and not st.session_state.st_tables.empty:
                     st.dataframe(st.session_state.st_tables, use_container_width=True)
-                    csv = st.session_state.st_tables.to_csv(index=False)
-                    st.download_button("📥 Download", csv, f"table_storage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_st_tables")
+                    st.download_button("📥 Download", st.session_state.st_tables.to_csv(index=False),
+                                       f"table_storage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_st_tables")
                 else:
-                    st.info("Select a specific Database and Schema (not 'All') and click 'Load Storage Data' to see table details.")
+                    st.info("Select a specific Database and Schema (not 'All') in the Global Filters, then click 'Load Storage Data'.")
 
         # ---- WAREHOUSE ACTIVITY ----
         with perf_tab5:
             st.subheader("🏭 Warehouse Activity")
             if st.button("🔄 Load Warehouse Activity Data", key="load_wa", type="primary"):
-                with st.spinner("Loading warehouse activity data..."):
+                with st.spinner("Loading..."):
                     try:
-                        wa_util = fetch_warehouse_utilization(
+                        st.session_state.wa_util = fetch_warehouse_utilization(
                             st.session_state.conn, perf_start, perf_end, perf_warehouse
                         )
-                        st.session_state.wa_util = wa_util
                         st.success("✅ Data loaded!")
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
+                        st.session_state.wa_util = pd.DataFrame()
 
             if 'wa_util' in st.session_state and not st.session_state.wa_util.empty:
+                # Summary metrics
+                wa_m1, wa_m2, wa_m3 = st.columns(3)
+                avg_run = pd.to_numeric(st.session_state.wa_util.get("Avg Running", pd.Series(dtype=float)), errors='coerce').mean()
+                avg_queued = pd.to_numeric(st.session_state.wa_util.get("Avg Queued", pd.Series(dtype=float)), errors='coerce').mean()
+                avg_blocked = pd.to_numeric(st.session_state.wa_util.get("Avg Blocked", pd.Series(dtype=float)), errors='coerce').mean()
+                wa_m1.metric("Avg Running Queries", f"{avg_run:.2f}")
+                wa_m2.metric("Avg Queued Load", f"{avg_queued:.2f}")
+                wa_m3.metric("Avg Blocked Queries", f"{avg_blocked:.2f}")
+
                 st.dataframe(st.session_state.wa_util, use_container_width=True)
-                csv = st.session_state.wa_util.to_csv(index=False)
-                st.download_button("📥 Download", csv, f"warehouse_activity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_wa")
+                st.download_button("📥 Download", st.session_state.wa_util.to_csv(index=False),
+                                   f"warehouse_activity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", key="dl_wa")
 
                 if MATPLOTLIB_AVAILABLE:
-                    df_plot = st.session_state.wa_util.copy()
                     wa_col1, wa_col2 = st.columns(2)
+                    df_p = st.session_state.wa_util.copy()
                     with wa_col1:
-                        if "Date" in df_plot.columns and "Avg Running" in df_plot.columns:
+                        if "Date" in df_p.columns and "Avg Running" in df_p.columns:
                             fig, ax = plt.subplots(figsize=(8, 4))
-                            df_plot["Date"] = pd.to_datetime(df_plot["Date"])
-                            daily_avg = df_plot.groupby("Date")["Avg Running"].mean().reset_index()
-                            daily_avg["Avg Running"] = pd.to_numeric(daily_avg["Avg Running"], errors='coerce').fillna(0)
-                            ax.plot(daily_avg["Date"], daily_avg["Avg Running"], marker='o', color='royalblue')
-                            ax.set_xlabel("Date")
-                            ax.set_ylabel("Avg Running Queries")
+                            df_p["Date"] = pd.to_datetime(df_p["Date"])
+                            daily = df_p.groupby("Date")["Avg Running"].mean().reset_index()
+                            daily["Avg Running"] = pd.to_numeric(daily["Avg Running"], errors='coerce').fillna(0)
+                            ax.plot(daily["Date"], daily["Avg Running"], marker='o', color='royalblue', linewidth=2)
+                            ax.set_xlabel("Date"); ax.set_ylabel("Avg Running")
                             ax.set_title("Daily Avg Running Queries")
-                            ax.grid(True)
-                            plt.xticks(rotation=45)
-                            plt.tight_layout()
-                            st.pyplot(fig)
-                            plt.close()
+                            ax.grid(True, alpha=0.3); plt.xticks(rotation=45); plt.tight_layout()
+                            st.pyplot(fig); plt.close()
                     with wa_col2:
-                        if "Warehouse" in df_plot.columns and "Avg Running" in df_plot.columns:
+                        if "Warehouse" in df_p.columns and "Avg Running" in df_p.columns:
                             fig, ax = plt.subplots(figsize=(8, 4))
-                            wh_avg = df_plot.groupby("Warehouse")[["Avg Running", "Avg Queued", "Avg Blocked"]].mean()
-                            wh_avg = wh_avg.apply(pd.to_numeric, errors='coerce').fillna(0)
-                            wh_avg.plot(kind='bar', ax=ax, cmap='Set2')
-                            ax.set_xlabel("Warehouse")
-                            ax.set_ylabel("Average Count")
+                            cols_to_plot = [c for c in ["Avg Running", "Avg Queued", "Avg Blocked"] if c in df_p.columns]
+                            grp = df_p.groupby("Warehouse")[cols_to_plot].mean().apply(pd.to_numeric, errors='coerce').fillna(0)
+                            grp.plot(kind='bar', ax=ax, cmap='Set2')
+                            ax.set_xlabel("Warehouse"); ax.set_ylabel("Average")
                             ax.set_title("Avg Load by Warehouse")
-                            plt.xticks(rotation=45, ha='right')
-                            plt.tight_layout()
-                            st.pyplot(fig)
-                            plt.close()
+                            plt.xticks(rotation=45, ha='right'); plt.tight_layout()
+                            st.pyplot(fig); plt.close()
             else:
                 st.info("Click 'Load Warehouse Activity Data' to see results.")
 

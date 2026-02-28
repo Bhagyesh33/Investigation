@@ -166,13 +166,11 @@ st.markdown("""
         width: 100%;
         text-align: center;
         padding: 12px 20px;
-        background: linear-gradient(90deg, #0a0f1e, #13203d, #1f3d6d);
         color: #b0c4de;
         border-top: 2px solid #2c4e8a;
         font-size: 13px;
         font-weight: 300;
         z-index: 9999;
-        box-shadow: 0 -4px 15px rgba(10, 15, 30, 0.4);
         letter-spacing: 0.3px;
     }
     

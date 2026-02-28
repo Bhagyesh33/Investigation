@@ -86,6 +86,49 @@ header {visibility: hidden !important;}
 
 st.markdown("""
 <style>
+            
+        /* Button styling - Blue theme */
+    .stButton button {
+        width: 100%;
+        border-radius: 8px;
+        font-weight: 600;
+        background-color: #0066cc !important;
+        color: white !important;
+        border: none !important;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton button:hover {
+        background-color: #0052a3 !important;
+        color: white !important;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0,102,204,0.3);
+    }
+    
+    .stButton button:active {
+        background-color: #004080 !important;
+        transform: translateY(0);
+    }
+    
+    /* Primary button styling (if you want them slightly different) */
+    .stButton button[kind="primary"] {
+        background-color: #004080 !important;
+    }
+    
+    .stButton button[kind="primary"]:hover {
+        background-color: #003366 !important;
+    }
+    
+    /* Form submit button */
+    .stForm button {
+        background-color: #0066cc !important;
+        color: white !important;
+        border: none !important;
+    }
+    
+    .stForm button:hover {
+        background-color: #0052a3 !important;
+    }
     /* Hide default streamlit elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}

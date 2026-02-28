@@ -188,7 +188,7 @@ st.markdown("""
         width: 100%;
         border-radius: 8px;
         font-weight: 600;
-        background-color: #0066cc !important;
+        background-color: #4da6ff !important;
         color: white !important;
         border: none !important;
         transition: all 0.3s ease;

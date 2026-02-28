@@ -120,13 +120,13 @@ st.markdown("""
         right: 50%;
         margin-left: -50vw;
         margin-right: -50vw;
-        background: linear-gradient(90deg, #0a0f1e, #13203d, #1f3d6d);
+        background: linear-gradient(90deg, #6b2e8f, #8e44ad, #9b59b6);
         padding: 10px 60px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-        border-bottom: 2px solid #2c4e8a;
+        border-bottom: 2px solid #c39bd3;
         z-index: 10;
         margin-bottom: 20px;
         flex-shrink: 0;

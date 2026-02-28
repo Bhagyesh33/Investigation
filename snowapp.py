@@ -979,7 +979,7 @@ def show_login_page():
         st.markdown(f"""
         <div class="header-full">
             <div class="header-logo">
-                <img src="data:image/png;base64,{logo_base64}" alt="DeploySure Logo">
+                <img src="logo-clbs- (1).png,{logo_base64}" alt="DeploySure Logo">
             </div>
             <div class="header-text">
                 <h1>DeploySure Suite</h1>

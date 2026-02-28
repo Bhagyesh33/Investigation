@@ -119,7 +119,7 @@ st.markdown("""
         margin-left: -50vw;
         margin-right: -50vw;
         background: linear-gradient(90deg, #0a0f1e, #13203d, #1f3d6d);
-        padding: 15px 60px;
+        padding: 10px 50px;
         display: flex;
         align-items: center;
         justify-content: space-between;

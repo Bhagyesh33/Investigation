@@ -1392,6 +1392,12 @@ def show_main_app():
             """Render a horizontal bar chart using st.bar_chart (native) or matplotlib."""
             if df is None or df.empty:
                 return
+            
+            # Check if the required columns exist
+            if label_col not in df.columns or value_col not in df.columns:
+                st.warning(f"Required columns '{label_col}' or '{value_col}' not found in data. Available columns: {list(df.columns)}")
+                return
+            
             df = df.copy()
             df[value_col] = pd.to_numeric(df[value_col], errors='coerce').fillna(0)
             df = df.nlargest(10, value_col).sort_values(value_col)
@@ -1550,8 +1556,8 @@ def show_main_app():
             if 'ua_queries_per_user' in st.session_state and not st.session_state.ua_queries_per_user.empty:
                 st.markdown("#### 📊 Query Execution Count by User")
                 st.dataframe(st.session_state.ua_queries_per_user, use_container_width=True)
-                _hbar_chart(st.session_state.ua_queries_per_user, "User", "Total Queries",
-                            "Total Queries per User", color="mediumseagreen")
+                _hbar_chart(st.session_state.ua_queries_per_user, "User", "Query Count",
+                    "Total Queries per User", color="mediumseagreen")
 
         # =========================================================
         # ⚡ QUERY PERFORMANCE

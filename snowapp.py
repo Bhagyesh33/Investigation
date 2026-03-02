@@ -2285,6 +2285,6 @@ st.markdown("---")
 # ========== FIXED FOOTER ==========
 st.markdown("""
 <div class="fixed-footer">
-    <p>DeploySure Suite v2.0 | CloudLabs Inc | © 2024</p>
+    <p>DeploySure Suite v2.0 | CloudLabs Inc | © 2026</p>
 </div>
 """, unsafe_allow_html=True)
